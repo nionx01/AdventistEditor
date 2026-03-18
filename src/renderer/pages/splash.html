@@ -89,7 +89,15 @@
     <div class="splash-loader-bar"></div>
   </div>
 
-  <div class="splash-version">v0.0.1-beta</div>
+  <div class="splash-version" id="splash-version">v0.1.1</div>
 
+  <script>
+    // Pull the real version from main process so it always matches package.json
+    if (window.electronAPI) {
+      window.electronAPI.invoke('app:get-version').then(v => {
+        document.getElementById('splash-version').textContent = 'v' + v;
+      }).catch(() => {});
+    }
+  </script>
 </body>
 </html>

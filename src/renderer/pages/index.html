@@ -286,7 +286,20 @@
                         </button>
                       </div>
                     </div>
-                    <!-- AI Generation controls (shown when generating) -->
+                    <!-- Whisper not installed — show install prompt -->
+                    <div id="whisper-install-box" class="whisper-install-box hidden">
+                      <div class="whisper-install-info">
+                        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" width="18" height="18"><circle cx="10" cy="10" r="8"/><path d="M10 6v4m0 3h.01"/></svg>
+                        <span>Whisper AI is not installed. Click below to install automatically (requires internet).</span>
+                      </div>
+                      <button id="btn-whisper-install" class="btn btn-sm btn-primary ai-btn">Install Whisper AI</button>
+                      <div id="whisper-install-progress" class="whisper-progress hidden">
+                        <div class="progress-bar"><div id="whisper-install-fill" class="progress-fill"></div></div>
+                        <span id="whisper-install-text" class="progress-text">Starting…</span>
+                      </div>
+                    </div>
+
+                    <!-- AI Generation controls (shown when Whisper is available) -->
                     <div id="whisper-controls" class="whisper-controls hidden">
                       <div class="whisper-model-row">
                         <label>Whisper model:</label>

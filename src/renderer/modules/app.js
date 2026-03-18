@@ -828,24 +828,101 @@ function updateSubtitleOverlay(currentTime) {
 // ---------------------------------------------------------------------------
 // Whisper AI subtitle generation
 // ---------------------------------------------------------------------------
-function initWhisperUI() {
-  const btn        = document.getElementById('btn-generate-subtitles');
-  const controls   = document.getElementById('whisper-controls');
-  const btnRun     = document.getElementById('btn-whisper-run');
-  const btnCancel  = document.getElementById('btn-whisper-cancel');
+async function initWhisperUI() {
+  const btn          = document.getElementById('btn-generate-subtitles');
+  const controls     = document.getElementById('whisper-controls');
+  const installBox   = document.getElementById('whisper-install-box');
+  const btnInstall   = document.getElementById('btn-whisper-install');
+  const btnRun       = document.getElementById('btn-whisper-run');
+  const btnCancel    = document.getElementById('btn-whisper-cancel');
 
-  btn?.addEventListener('click', () => {
-    controls.classList.toggle('hidden');
+  // Check if Whisper is available; auto-install on first packaged run
+  async function checkAndShowWhisper() {
+    try {
+      const result     = await window.electronAPI.invoke('whisper:check');
+      const isPackaged = await window.electronAPI.invoke('app:is-packaged');
+      const firstRun   = await window.electronAPI.invoke('app:is-first-run');
+
+      if (result && result.available) {
+        // Whisper ready — wire up the normal AI Generate button
+        installBox?.classList.add('hidden');
+        btn?.addEventListener('click', () => controls.classList.toggle('hidden'));
+        // Mark setup complete if this is first run
+        if (firstRun) await window.electronAPI.invoke('setup:mark-complete');
+      } else {
+        // Not installed — show install panel on button click
+        btn?.addEventListener('click', () => {
+          installBox?.classList.toggle('hidden');
+          controls.classList.add('hidden');
+        });
+
+        // First launch of a packaged build → auto-open install panel and start install
+        if (isPackaged && firstRun) {
+          installBox?.classList.remove('hidden');
+          // Small delay so the editor UI is fully rendered before kicking off the install
+          setTimeout(() => btnInstall?.click(), 900);
+        }
+      }
+    } catch {
+      btn?.addEventListener('click', () => {
+        installBox?.classList.toggle('hidden');
+        controls.classList.add('hidden');
+      });
+    }
+  }
+
+  await checkAndShowWhisper();
+
+  // Install button
+  btnInstall?.addEventListener('click', async () => {
+    const installProgress = document.getElementById('whisper-install-progress');
+    const installFill     = document.getElementById('whisper-install-fill');
+    const installText     = document.getElementById('whisper-install-text');
+
+    btnInstall.disabled = true;
+    btnInstall.textContent = 'Installing…';
+    installProgress?.classList.remove('hidden');
+
+    // Listen for install progress
+    const cleanup = window.electronAPI.on('whisper:install-progress', (p) => {
+      if (installFill && p.percent != null) installFill.style.width = `${p.percent}%`;
+      if (installText) installText.textContent = p.message || '…';
+    });
+
+    try {
+      const result = await window.electronAPI.invoke('whisper:install');
+      if (result && result.success) {
+        installText.textContent = '✓ Whisper AI installed successfully!';
+        installFill.style.width = '100%';
+        // After success swap to normal generate controls and mark setup done
+        await window.electronAPI.invoke('setup:mark-complete');
+        setTimeout(() => {
+          installBox?.classList.add('hidden');
+          btn?.addEventListener('click', () => controls.classList.toggle('hidden'));
+          setStatus('✓ Whisper AI installed! Click AI Generate to create subtitles.');
+        }, 1500);
+      } else {
+        installText.textContent = '✗ ' + (result?.error || 'Install failed');
+        btnInstall.disabled = false;
+        btnInstall.textContent = 'Retry Install';
+      }
+    } catch (err) {
+      installText.textContent = '✗ ' + err.message;
+      btnInstall.disabled = false;
+      btnInstall.textContent = 'Retry Install';
+    } finally {
+      if (cleanup) cleanup();
+    }
   });
 
   btnCancel?.addEventListener('click', () => {
     controls.classList.add('hidden');
-    document.getElementById('whisper-progress').classList.add('hidden');
+    document.getElementById('whisper-progress')?.classList.add('hidden');
   });
 
   btnRun?.addEventListener('click', runWhisperGeneration);
 
-  // Listen for progress events from main process
+  // Listen for generation progress events from main process
   window.electronAPI.on('whisper:progress', (progress) => {
     const bar  = document.getElementById('whisper-progress-fill');
     const text = document.getElementById('whisper-progress-text');

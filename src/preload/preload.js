@@ -30,14 +30,18 @@ const INVOKE_CHANNELS = [
   'audio:mute',
   'whisper:generate',
   'whisper:check',
+  'whisper:install',
   'dialog:save-file',
   'dialog:open-file',
   'app:get-version',
   'app:get-path',
+  'app:is-packaged',
+  'app:is-first-run',
   'app:quit',
   'app:reload',
   'app:toggle-devtools',
   'app:fullscreen',
+  'setup:mark-complete',
 ];
 
 // Whitelist of channels the renderer is allowed to listen to
@@ -49,6 +53,7 @@ const LISTEN_CHANNELS = [
   'menu:save-project',
   'menu:about',
   'whisper:progress',
+  'whisper:install-progress',
 ];
 
 contextBridge.exposeInMainWorld('electronAPI', {

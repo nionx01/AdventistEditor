@@ -982,6 +982,31 @@
   background: linear-gradient(135deg, var(--accent-hover), var(--accent-secondary));
 }
 
+/* ===== Whisper Install Box ===== */
+.whisper-install-box {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.whisper-install-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.whisper-install-info svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--accent);
+}
+
 /* ===== Whisper Controls ===== */
 .whisper-controls {
   padding: 8px 10px;
