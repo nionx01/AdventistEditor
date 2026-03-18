@@ -32,6 +32,8 @@
       "node_modules/**/*",
       "package.json"
     ],
+    "cscLink": "C:\\Users\\next\\Documents\\NionX-cert.pfx",
+    "cscKeyPassword": "YourPassword123",
     "win": {
       "target": [
         {
