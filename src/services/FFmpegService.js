@@ -27,12 +27,25 @@ try {
   ffmpeg = null; // Graceful fallback — service works in demo mode
 }
 
+// Use bundled ffmpeg-static binary so FFmpeg is always available
+// even on machines where it is not installed system-wide.
+let ffmpegStaticPath = null;
+let ffprobeStaticPath = null;
+try {
+  ffmpegStaticPath  = require('ffmpeg-static');
+  // ffprobe ships alongside ffmpeg-static in the same directory
+  const ffprobeStatic = require('ffprobe-static');
+  ffprobeStaticPath = ffprobeStatic.path;
+} catch {
+  // Fall back to system PATH if the static packages aren't present
+}
+
 class FFmpegService {
   constructor(options = {}) {
-    this.ffmpegPath = options.ffmpegPath || null; // Override binary path
-    this.ffprobePath = options.ffprobePath || null;
+    this.ffmpegPath  = options.ffmpegPath  || ffmpegStaticPath  || null;
+    this.ffprobePath = options.ffprobePath || ffprobeStaticPath || null;
 
-    if (this.ffmpegPath && ffmpeg) ffmpeg.setFfmpegPath(this.ffmpegPath);
+    if (this.ffmpegPath  && ffmpeg) ffmpeg.setFfmpegPath(this.ffmpegPath);
     if (this.ffprobePath && ffmpeg) ffmpeg.setFfprobePath(this.ffprobePath);
   }
 
