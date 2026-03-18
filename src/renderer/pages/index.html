@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; media-src 'self' file:; img-src 'self' file: data:;">
+  <title>AdventistEditor</title>
+  <link rel="stylesheet" href="../styles/theme.css">
+  <link rel="stylesheet" href="../styles/layout.css">
+  <link rel="stylesheet" href="../styles/components.css">
+</head>
+<body>
+
+  <!-- ===== App Shell ===== -->
+  <div id="app" class="app-shell">
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar">
+      <!-- ===== Logo Button — click opens Figma-style app menu ===== -->
+      <div class="sidebar-brand">
+        <button id="logo-menu-btn" class="logo-menu-btn" title="AdventistEditor Menu">
+          <img src="../../assets/AdventistEditorIcon.png" alt="AdventistEditor" class="sidebar-logo-img" draggable="false">
+        </button>
+
+        <!-- Dropdown panel -->
+        <div id="logo-dropdown" class="logo-dropdown hidden">
+          <div class="logo-dropdown-header">
+            <span class="logo-dropdown-appname">AdventistEditor</span>
+            <span class="logo-dropdown-version">v0.0.1-beta</span>
+          </div>
+          <div class="logo-dropdown-divider"></div>
+
+          <button class="logo-dropdown-item" data-action="new-project">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="1.5"/><line x1="8" y1="5" x2="8" y2="11"/><line x1="5" y1="8" x2="11" y2="8"/></svg>
+            New Project
+            <span class="logo-dropdown-shortcut">Ctrl+N</span>
+          </button>
+          <button class="logo-dropdown-item" data-action="open-project">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h3l1.5 1.5H13A1.5 1.5 0 0 1 14 7v4a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11V5.5z"/></svg>
+            Open Project
+            <span class="logo-dropdown-shortcut">Ctrl+O</span>
+          </button>
+          <button class="logo-dropdown-item" data-action="save-project">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 2h7.5L13 4.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><rect x="5" y="9" width="6" height="5" rx="0.5"/><rect x="5" y="2" width="4" height="3" rx="0.5"/></svg>
+            Save Project
+            <span class="logo-dropdown-shortcut">Ctrl+S</span>
+          </button>
+
+          <div class="logo-dropdown-divider"></div>
+
+          <button class="logo-dropdown-item" data-action="import-media">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="8 3 8 10"/><polyline points="5 7 8 10 11 7"/><path d="M3 12h10"/></svg>
+            Import Media
+            <span class="logo-dropdown-shortcut">Ctrl+I</span>
+          </button>
+
+          <div class="logo-dropdown-divider"></div>
+
+          <button class="logo-dropdown-item" data-action="settings">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.22 3.22l1.42 1.42M11.36 11.36l1.42 1.42M3.22 12.78l1.42-1.42M11.36 4.64l1.42-1.42"/></svg>
+            Settings
+          </button>
+
+          <div class="logo-dropdown-divider"></div>
+
+          <button class="logo-dropdown-item" data-action="toggle-devtools">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="5 4 1 8 5 12"/><polyline points="11 4 15 8 11 12"/><line x1="8" y1="2" x2="8" y2="14"/></svg>
+            Toggle DevTools
+            <span class="logo-dropdown-shortcut">F12</span>
+          </button>
+          <button class="logo-dropdown-item" data-action="fullscreen">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="1 6 1 1 6 1"/><polyline points="10 1 15 1 15 6"/><polyline points="15 10 15 15 10 15"/><polyline points="6 15 1 15 1 10"/></svg>
+            Toggle Fullscreen
+          </button>
+
+          <div class="logo-dropdown-divider"></div>
+
+          <button class="logo-dropdown-item logo-dropdown-item--danger" data-action="quit">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/><polyline points="11 11 14 8 11 5"/><line x1="14" y1="8" x2="6" y2="8"/></svg>
+            Quit
+            <span class="logo-dropdown-shortcut">Alt+F4</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Invisible overlay to close dropdown when clicking outside -->
+      <div id="logo-dropdown-overlay" class="logo-dropdown-overlay hidden"></div>
+
+      <nav class="sidebar-nav">
+        <!-- Home — always visible -->
+        <button class="sidebar-btn active" data-view="welcome" title="Home">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <span>Home</span>
+        </button>
+
+        <!-- Editor — only shown when a project is open -->
+        <button id="nav-editor" class="sidebar-btn hidden" data-view="editor" title="Editor">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="20" height="20" rx="2"/>
+            <line x1="8" y1="2" x2="8" y2="22"/>
+            <line x1="2" y1="15" x2="22" y2="15"/>
+          </svg>
+          <span>Editor</span>
+        </button>
+      </nav>
+
+      <!-- Settings pinned to bottom -->
+      <div class="sidebar-footer">
+        <button class="sidebar-btn" data-view="settings" title="Settings">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>Settings</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main id="main-content" class="main-content">
+
+      <!-- Header Bar -->
+      <header class="header-bar">
+        <div class="header-left">
+          <h1 id="view-title" class="header-title">Home</h1>
+          <span id="project-name-badge" class="header-badge hidden">No Project</span>
+        </div>
+        <div class="header-right">
+          <button id="btn-import" class="header-action-btn hidden" title="Import Media">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import
+          </button>
+          <button id="btn-save" class="header-action-btn hidden" title="Save Project">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Save
+          </button>
+        </div>
+      </header>
+
+      <!-- View Container (swapped by navigation) -->
+      <div id="view-container" class="view-container">
+
+        <!-- ===== HOME VIEW ===== -->
+        <section id="view-welcome" class="view active">
+          <div class="home-layout">
+
+            <!-- Hero -->
+            <div class="home-hero">
+              <img src="../../assets/AdventistEditorIcon.png" alt="AdventistEditor" class="home-hero-icon" draggable="false">
+              <h2 class="home-hero-title">AdventistEditor</h2>
+              <p class="home-hero-tagline">Edit Long Videos Into Social-Ready Content</p>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="home-actions">
+              <button id="btn-new-project" class="home-action-card">
+                <div class="home-action-icon">
+                  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </div>
+                <div class="home-action-label">New Project</div>
+                <div class="home-action-hint">Start from scratch</div>
+              </button>
+              <button id="btn-open-project" class="home-action-card">
+                <div class="home-action-icon">
+                  <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div class="home-action-label">Open Project</div>
+                <div class="home-action-hint">Load an existing .aeproj file</div>
+              </button>
+            </div>
+
+            <!-- Recent Projects -->
+            <div class="home-section">
+              <div class="home-section-header">
+                <h3 class="home-section-title">Recent Projects</h3>
+              </div>
+              <div id="recent-projects-list" class="recent-projects-list">
+                <p class="home-empty-state">No recent projects yet — create or open a project to get started.</p>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ===== EDITOR VIEW ===== -->
+        <section id="view-editor" class="view">
+          <div class="editor-layout">
+
+            <!-- Left: Media Panel -->
+            <div class="editor-media-panel panel">
+              <div class="panel-header">
+                <h3>Media</h3>
+                <button id="btn-add-media" class="btn btn-sm btn-ghost" title="Add Media">+</button>
+              </div>
+              <div id="media-list" class="media-list">
+                <div class="empty-state">
+                  <p>No media imported.</p>
+                  <button class="btn btn-sm btn-secondary btn-import-media">Import Files</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Center: Preview + Tab Bar -->
+            <div class="editor-center">
+              <!-- Video Preview -->
+              <div class="preview-container">
+                <div id="preview-wrapper" class="preview-wrapper">
+                  <video id="video-player" class="video-player" preload="metadata"></video>
+                  <div id="subtitle-overlay" class="subtitle-overlay"></div>
+                  <div id="preview-empty" class="preview-empty-state">
+                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.4"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <p>Import a video to begin editing</p>
+                  </div>
+                </div>
+                <div class="player-controls">
+                  <div class="player-controls-left">
+                    <button id="btn-play" class="ctrl-btn" title="Play / Pause (Space)">
+                      <svg id="icon-play" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                      <svg id="icon-pause" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" class="hidden"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                    </button>
+                    <span id="time-display" class="time-display">00:00:00 / 00:00:00</span>
+                  </div>
+                  <div class="player-controls-center">
+                    <button id="btn-mark-in" class="ctrl-btn ctrl-sm" title="Mark In (I)">In</button>
+                    <button id="btn-mark-out" class="ctrl-btn ctrl-sm" title="Mark Out (O)">Out</button>
+                    <button id="btn-split" class="ctrl-btn ctrl-sm" title="Split at Playhead">Split</button>
+                  </div>
+                  <div class="player-controls-right">
+                    <button id="btn-volume" class="ctrl-btn" title="Volume">
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                    </button>
+                    <input id="volume-slider" type="range" min="0" max="1" step="0.05" value="1" class="volume-slider">
+                  </div>
+                </div>
+                <!-- Seek Bar -->
+                <div class="seekbar-container">
+                  <input id="seekbar" type="range" min="0" max="100" value="0" step="0.1" class="seekbar">
+                </div>
+              </div>
+
+              <!-- Editor Tab Bar -->
+              <div class="editor-tab-bar">
+                <button class="editor-tab active" data-tab="timeline">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><rect x="1" y="4" width="14" height="2.5" rx="0.5"/><rect x="1" y="9" width="9" height="2.5" rx="0.5"/></svg>
+                  Timeline
+                </button>
+                <button class="editor-tab" data-tab="subtitles">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><rect x="1" y="3" width="14" height="10" rx="1"/><line x1="3" y1="7" x2="13" y2="7"/><line x1="3" y1="10" x2="9" y2="10"/></svg>
+                  Subtitles
+                </button>
+                <button class="editor-tab" data-tab="export">
+                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M13 10v2.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10"/><polyline points="5 6 8 9 11 6"/><line x1="8" y1="9" x2="8" y2="2"/></svg>
+                  Export
+                </button>
+              </div>
+
+              <!-- Tab: Timeline -->
+              <div id="tab-timeline" class="editor-tab-content active">
+                <div class="timeline-panel panel">
+                  <div class="panel-header">
+                    <h3>Timeline</h3>
+                    <span id="clip-count" class="badge">0 clips</span>
+                  </div>
+                  <div id="timeline-track" class="timeline-track">
+                    <div class="empty-state">
+                      <p>No clips on the timeline. Mark In/Out on your video to create clips.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab: Subtitles -->
+              <div id="tab-subtitles" class="editor-tab-content hidden">
+                <div class="subtitles-inner">
+                  <div class="subtitle-editor-panel panel">
+                    <div class="panel-header">
+                      <h3>Subtitle Blocks</h3>
+                      <div class="panel-header-actions">
+                        <button id="btn-add-subtitle" class="btn btn-sm btn-ghost">+ Add</button>
+                        <button id="btn-generate-subtitles" class="btn btn-sm btn-primary ai-btn" title="Generate subtitles with AI (Whisper)">
+                          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="13" height="13"><circle cx="8" cy="8" r="6"/><path d="M5 8h6M8 5v6"/></svg>
+                          AI Generate
+                        </button>
+                      </div>
+                    </div>
+                    <!-- AI Generation controls (shown when generating) -->
+                    <div id="whisper-controls" class="whisper-controls hidden">
+                      <div class="whisper-model-row">
+                        <label>Whisper model:</label>
+                        <select id="whisper-model" class="form-input form-input-sm">
+                          <option value="tiny">Tiny (fastest)</option>
+                          <option value="base" selected>Base (recommended)</option>
+                          <option value="small">Small (more accurate)</option>
+                          <option value="medium">Medium (slower)</option>
+                          <option value="large">Large (most accurate)</option>
+                        </select>
+                        <button id="btn-whisper-run" class="btn btn-sm btn-primary">Run</button>
+                        <button id="btn-whisper-cancel" class="btn btn-sm btn-ghost">Cancel</button>
+                      </div>
+                      <div id="whisper-progress" class="whisper-progress hidden">
+                        <div class="progress-bar"><div id="whisper-progress-fill" class="progress-fill"></div></div>
+                        <span id="whisper-progress-text" class="progress-text">Preparing…</span>
+                      </div>
+                    </div>
+                    <div id="subtitle-list" class="subtitle-list">
+                      <div class="empty-state">
+                        <p>No subtitles yet. Click <strong>+ Add</strong> to add manually or <strong>AI Generate</strong> to auto-transcribe.</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="subtitle-style-panel panel">
+                    <div class="panel-header">
+                      <h3>Style Presets</h3>
+                    </div>
+                    <div id="style-presets-list" class="style-presets-list"></div>
+                    <div class="subtitle-style-editor" id="style-editor">
+                      <h4>Edit Style</h4>
+                      <div class="form-group">
+                        <label>Font Family</label>
+                        <select id="style-font-family" class="form-input">
+                          <option value="Arial">Arial</option>
+                          <option value="Impact">Impact</option>
+                          <option value="Georgia">Georgia</option>
+                          <option value="Courier New">Courier New</option>
+                          <option value="Segoe UI">Segoe UI</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Font Size</label>
+                        <input id="style-font-size" type="number" min="12" max="120" value="42" class="form-input">
+                      </div>
+                      <div class="form-row">
+                        <div class="form-group">
+                          <label>Text Color</label>
+                          <input id="style-text-color" type="color" value="#ffffff" class="form-color">
+                        </div>
+                        <div class="form-group">
+                          <label>Outline Color</label>
+                          <input id="style-outline-color" type="color" value="#000000" class="form-color">
+                        </div>
+                      </div>
+                      <div class="form-group">
+                        <label>Outline Thickness</label>
+                        <input id="style-outline-size" type="range" min="0" max="8" step="0.5" value="2" class="form-range">
+                      </div>
+                      <div class="form-group">
+                        <label>Display Mode</label>
+                        <select id="style-display-mode" class="form-input">
+                          <option value="full-line">Full Line</option>
+                          <option value="chunk">Chunk (2-4 words)</option>
+                          <option value="word-by-word">Word by Word</option>
+                          <option value="highlight">Highlight Current Word</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Background Box</label>
+                        <input id="style-bg-box" type="checkbox">
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab: Export -->
+              <div id="tab-export" class="editor-tab-content hidden">
+                <div class="export-inner">
+                  <div class="export-presets-panel panel">
+                    <div class="panel-header">
+                      <h3>Export Presets</h3>
+                    </div>
+                    <div class="export-preset-grid" id="export-preset-grid"></div>
+                  </div>
+                  <div class="export-settings-panel panel">
+                    <div class="panel-header">
+                      <h3>Export Settings</h3>
+                    </div>
+                    <div class="export-form">
+                      <div class="form-group">
+                        <label>Format</label>
+                        <select id="export-format" class="form-input">
+                          <option value="mp4">MP4</option>
+                          <option value="gif">GIF</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Resolution</label>
+                        <select id="export-resolution" class="form-input">
+                          <option value="1080x1920">1080 x 1920 (Vertical)</option>
+                          <option value="1920x1080">1920 x 1080 (Landscape)</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Framing</label>
+                        <select id="export-framing" class="form-input">
+                          <option value="crop">Crop to Fill</option>
+                          <option value="fit">Fit Inside Frame</option>
+                          <option value="blur-fill">Blurred Background Fill</option>
+                          <option value="center">Centered</option>
+                        </select>
+                      </div>
+                      <div class="form-group">
+                        <label>Quality</label>
+                        <select id="export-quality" class="form-input">
+                          <option value="high">High Quality</option>
+                          <option value="balanced">Balanced</option>
+                          <option value="fast">Compressed / Fast</option>
+                        </select>
+                      </div>
+                      <div id="gif-options" class="gif-options hidden">
+                        <div class="form-group">
+                          <label>GIF FPS</label>
+                          <input id="gif-fps" type="number" min="5" max="30" value="15" class="form-input">
+                        </div>
+                        <div class="form-group">
+                          <label>GIF Scale</label>
+                          <select id="gif-scale" class="form-input">
+                            <option value="480">480px wide</option>
+                            <option value="320">320px wide</option>
+                            <option value="640">640px wide</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="form-group">
+                        <label>Burn Subtitles</label>
+                        <input id="export-burn-subs" type="checkbox" checked>
+                      </div>
+                      <button id="btn-export-render" class="btn btn-primary btn-lg btn-block">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Export
+                      </button>
+                      <div id="export-progress" class="export-progress hidden">
+                        <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+                        <span id="progress-text" class="progress-text">Rendering...</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- /editor-center -->
+
+            <!-- Right: Inspector Panel -->
+            <div id="inspector-panel" class="editor-inspector-panel panel">
+              <div class="panel-header">
+                <h3>Inspector</h3>
+              </div>
+              <div id="inspector-content" class="inspector-content">
+                <div class="empty-state">
+                  <p>Select a clip or subtitle to inspect.</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ===== SETTINGS VIEW ===== -->
+        <section id="view-settings" class="view">
+          <div class="settings-container">
+            <h2>Settings</h2>
+            <div class="settings-section">
+              <h3>General</h3>
+              <div class="form-group">
+                <label>FFmpeg Path</label>
+                <div class="input-with-btn">
+                  <input id="ffmpeg-path" type="text" class="form-input" placeholder="Auto-detect or enter path..." value="">
+                  <button id="btn-browse-ffmpeg" class="btn btn-sm btn-secondary">Browse</button>
+                </div>
+                <small class="form-hint">Leave blank to use system FFmpeg</small>
+              </div>
+              <div class="form-group">
+                <label>Default Export Folder</label>
+                <div class="input-with-btn">
+                  <input id="export-folder" type="text" class="form-input" placeholder="Choose folder...">
+                  <button id="btn-browse-export-folder" class="btn btn-sm btn-secondary">Browse</button>
+                </div>
+              </div>
+            </div>
+            <div class="settings-section">
+              <h3>Editor</h3>
+              <div class="form-group">
+                <label>Default Mode</label>
+                <select id="setting-default-mode" class="form-input">
+                  <option value="quick">Quick Mode</option>
+                  <option value="advanced" selected>Advanced Mode</option>
+                </select>
+              </div>
+            </div>
+            <div class="settings-section">
+              <h3>About</h3>
+              <div class="about-block">
+                <img src="../../assets/AdventistEditorIcon.png" alt="AdventistEditor" class="about-icon" draggable="false">
+                <div class="about-info">
+                  <p class="about-appname">AdventistEditor</p>
+                  <p class="about-version">Version <span id="settings-version">...</span></p>
+                </div>
+              </div>
+              <p class="text-muted">A professional desktop video editor for social-media-ready content.</p>
+              <p class="text-muted">Built with Electron, Node.js, and FFmpeg.</p>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /view-container -->
+
+      <!-- Status Bar -->
+      <footer class="status-bar">
+        <span id="status-text" class="status-text">Ready</span>
+        <span id="status-ffmpeg" class="status-ffmpeg">FFmpeg: checking...</span>
+      </footer>
+
+    </main>
+  </div>
+
+  <!-- ===== New Project Modal ===== -->
+  <div id="modal-new-project" class="modal-backdrop hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">New Project</h3>
+        <button id="modal-new-project-close" class="modal-close-btn" title="Cancel">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="2" y1="2" x2="14" y2="14"/><line x1="14" y1="2" x2="2" y2="14"/></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <label class="modal-label" for="new-project-name">Project name</label>
+        <input id="new-project-name" class="modal-input" type="text" placeholder="e.g. Sunday Sermon Shorts" maxlength="80" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="modal-footer">
+        <button id="modal-new-project-cancel" class="btn btn-secondary">Cancel</button>
+        <button id="modal-new-project-confirm" class="btn btn-primary">Create Project</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project Context Menu (global, positioned absolutely) -->
+  <div id="project-ctx-menu" class="project-ctx-menu hidden">
+    <button class="project-ctx-item" data-ctx-action="open">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M2 5.5A1.5 1.5 0 0 1 3.5 4h3l1.5 1.5H13A1.5 1.5 0 0 1 14 7v4a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11V5.5z"/></svg>
+      Open
+    </button>
+    <button class="project-ctx-item" data-ctx-action="export">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><path d="M13 10v2.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10"/><polyline points="5 6 8 9 11 6"/><line x1="8" y1="9" x2="8" y2="2"/></svg>
+      Export
+    </button>
+    <div class="project-ctx-divider"></div>
+    <button class="project-ctx-item" data-ctx-action="archive">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><rect x="1" y="3" width="14" height="3" rx="0.5"/><path d="M2 6v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6"/><line x1="6" y1="9" x2="10" y2="9"/></svg>
+      Archive
+    </button>
+    <button class="project-ctx-item project-ctx-item--danger" data-ctx-action="delete">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><polyline points="2 4 4 4 14 4"/><path d="M5 4V3a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v1"/><path d="M6 7v5M10 7v5"/><path d="M3 4l1 9a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-9"/></svg>
+      Delete
+    </button>
+  </div>
+
+  <!-- Renderer Scripts -->
+  <script src="../modules/app.js"></script>
+</body>
+</html>

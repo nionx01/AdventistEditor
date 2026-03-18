@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' file: data:;">
+  <title>AdventistEditor</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+    }
+
+    .splash-logo {
+      width: 88px;
+      height: 88px;
+      margin-bottom: 16px;
+    }
+
+    .splash-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .splash-title {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      margin-bottom: 28px;
+      color: #f0f0f0;
+    }
+
+    /* Animated progress bar */
+    .splash-loader {
+      width: 200px;
+      height: 3px;
+      background: #1c1c1c;
+      border-radius: 2px;
+      overflow: hidden;
+      margin-bottom: 0;
+    }
+
+    .splash-loader-bar {
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #2563eb, #7c3aed);
+      border-radius: 2px;
+      animation: load 1.9s ease-in-out forwards;
+    }
+
+    @keyframes load {
+      0%   { width: 0%;   opacity: 1; }
+      40%  { width: 60%;  opacity: 1; }
+      80%  { width: 88%;  opacity: 1; }
+      100% { width: 100%; opacity: 1; }
+    }
+
+    .splash-version {
+      position: absolute;
+      bottom: 16px;
+      font-size: 11px;
+      color: #383838;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- In-app icon (no background, transparent PNG) -->
+  <div class="splash-logo">
+    <img src="../../assets/AdventistEditorIcon.png" alt="AdventistEditor Logo" draggable="false">
+  </div>
+
+  <div class="splash-title">AdventistEditor</div>
+
+  <div class="splash-loader">
+    <div class="splash-loader-bar"></div>
+  </div>
+
+  <div class="splash-version">v0.0.1-beta</div>
+
+</body>
+</html>
