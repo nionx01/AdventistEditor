@@ -12,18 +12,29 @@ const path = require('path');
 const { app } = require('electron');
 
 class ProjectService {
-  constructor() {
-    // Root: Documents\ProjectsAdventistEditor\
-    // Each project lives in its own subfolder: ...\ProjectName\ProjectName.aeproj
+  /**
+   * @param {import('./SettingsService')} settingsService - optional, for dynamic projectsDir
+   */
+  constructor(settingsService) {
+    this._settings = settingsService || null;
     const docsFolder = app ? app.getPath('documents') : require('os').homedir();
-    this.defaultProjectsDir = path.join(docsFolder, 'ProjectsAdventistEditor');
-    this.recentProjectsPath = path.join(this.defaultProjectsDir, 'recent-projects.json');
+    this._fallbackDir = path.join(docsFolder, 'ProjectsAdventistEditor');
     this._ensureDataDir();
   }
 
+  /** Always resolves the current projects root (can change at runtime via Settings) */
+  get defaultProjectsDir() {
+    return this._settings ? this._settings.getProjectsDir() : this._fallbackDir;
+  }
+
+  get recentProjectsPath() {
+    return path.join(this.defaultProjectsDir, 'recent-projects.json');
+  }
+
   _ensureDataDir() {
-    if (!fs.existsSync(this.defaultProjectsDir)) {
-      fs.mkdirSync(this.defaultProjectsDir, { recursive: true });
+    const dir = this.defaultProjectsDir;
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
   }
 
@@ -129,6 +140,43 @@ class ProjectService {
       // ignore
     }
     return [];
+  }
+
+  /**
+   * Permanently delete the project folder from disk AND remove from recents.
+   * The project folder is the parent directory of the .aeproj file.
+   */
+  deleteProjectFromDisk(filePath) {
+    // Remove from recents first (non-critical)
+    this.removeFromRecent(filePath);
+
+    const projectFolder  = path.dirname(filePath);
+    const resolvedFolder = path.resolve(projectFolder);
+    const resolvedRoot   = path.resolve(this.defaultProjectsDir);
+
+    // Safety: only delete folders that live inside the projects root
+    if (!resolvedFolder.startsWith(resolvedRoot + path.sep) &&
+        resolvedFolder !== resolvedRoot) {
+      throw new Error('Cannot delete: project is outside the projects directory.');
+    }
+
+    if (fs.existsSync(projectFolder)) {
+      fs.rmSync(projectFolder, { recursive: true, force: true });
+    }
+    return true;
+  }
+
+  /**
+   * Remove a project from the recent-projects list by filePath.
+   */
+  removeFromRecent(filePath) {
+    try {
+      let recent = this.getRecentProjects();
+      recent = recent.filter(r => r.filePath !== filePath);
+      fs.writeFileSync(this.recentProjectsPath, JSON.stringify(recent, null, 2), 'utf8');
+    } catch {
+      // Non-critical
+    }
   }
 
   // -------------------------------------------------------------------------

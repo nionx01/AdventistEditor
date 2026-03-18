@@ -174,29 +174,33 @@
 
 /* ===== Video Player ===== */
 .preview-container {
-  flex: 1;
+  /* flex sizing is controlled by layout.css (flex: 0 0 45%) */
+  /* JS resize handle overrides with inline style height + flex: none */
   display: flex;
   flex-direction: column;
   min-height: 0;
   background: #000;
   position: relative;
+  overflow: hidden;
 }
 
 .preview-wrapper {
   flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;  /* video fills full height */
+  justify-content: stretch;
   position: relative;
   min-height: 0;
   overflow: hidden;
+  background: #000;
 }
 
 .video-player {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* letterbox/pillarbox — never stretches portrait or landscape */
   display: block;
+  background: #000;
 }
 
 .subtitle-overlay {
@@ -340,101 +344,43 @@
 /* ===== Timeline ===== */
 .timeline-panel {
   min-height: 140px;
-  max-height: 220px;
   border-top: 1px solid var(--border-subtle);
 }
 
-.timeline-track {
-  flex: 1;
-  padding: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  display: flex;
-  gap: 4px;
-  align-items: stretch;
-  min-height: 80px;
-}
-
-.timeline-clip {
-  min-width: 60px;
-  height: 64px;
-  background: var(--accent-muted);
-  border: 1px solid var(--accent);
+#tab-timeline.drop-active .timeline-workspace,
+#tab-timeline.drop-active .timeline-empty-state {
+  background: rgba(37, 99, 235, 0.06);
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
   border-radius: var(--radius-sm);
-  padding: 6px 10px;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  flex-shrink: 0;
 }
 
-.timeline-clip:hover {
-  background: rgba(37, 99, 235, 0.25);
-}
-
-.timeline-clip.selected {
-  border-color: var(--accent-hover);
-  box-shadow: 0 0 0 2px var(--accent-muted);
-}
-
-.timeline-clip .clip-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.timeline-clip .clip-time {
-  font-size: 9px;
-  color: var(--text-secondary);
-  font-family: var(--font-mono);
-}
+/* (timeline-track, timeline-clip styles moved to Pro Timeline section below) */
 
 /* ===== Media List ===== */
 .media-list {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+  transition: background 0.15s, border-color 0.15s;
 }
 
-.media-item {
-  padding: 8px 10px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
+/* Drop zone highlight when dragging files from Explorer */
+.media-list.drop-active {
+  background: rgba(37, 99, 235, 0.08);
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
   border-radius: var(--radius-sm);
-  margin-bottom: 6px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
 }
 
-.media-item:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-default);
-}
-
-.media-item.active {
-  border-color: var(--accent);
-  background: var(--accent-muted);
-}
-
-.media-item .media-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-bottom: 3px;
-}
-
-.media-item .media-meta {
-  font-size: 10px;
+.drop-hint {
+  font-size: 11px;
   color: var(--text-muted);
+  margin-top: 6px;
+  opacity: 0.7;
 }
+
+/* (media-item styles moved to Media Panel Thumbnails section below) */
 
 /* ===== Subtitle Blocks ===== */
 .subtitle-block {
@@ -1113,10 +1059,771 @@
   color: var(--danger);
 }
 
-.timeline-track {
+/* ===== Media Panel Thumbnails ===== */
+.media-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+  user-select: none;
+}
+
+.media-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-subtle);
+}
+
+.media-item.active {
+  background: var(--accent-muted);
+  border-color: var(--accent);
+}
+
+.media-thumb {
+  width: 54px;
+  height: 32px;
+  border-radius: 3px;
+  object-fit: cover;
+  background: #1a1a1a;
+  border: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.media-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 2px;
+  display: block;
+}
+
+.media-thumb-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+}
+
+.media-thumb-placeholder svg {
+  opacity: 0.3;
+}
+
+.media-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.media-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.media-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: var(--font-mono);
+}
+
+/* ===== Pro Horizontal Timeline ===== */
+
+/* Timeline panel header with zoom controls */
+.timeline-panel-header {
+  gap: 8px; /* adds gap between h3, badge, and zoom controls */
+}
+
+.timeline-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto; /* pushes to the right even with justify-content:space-between parent */
+}
+
+.timeline-zoom-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-width: 24px;
+  text-align: center;
+}
+
+/* Empty state */
+.timeline-empty-state {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
-  flex: 1;
-  padding: 4px 0;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  padding: 24px;
 }
+
+/* Timeline workspace — the scrollable pro area */
+.timeline-workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  background: var(--bg-root, #0d0d0d);
+}
+
+/* Ruler row */
+.timeline-ruler-row {
+  display: flex;
+  flex-shrink: 0;
+  height: 26px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+}
+
+.timeline-track-gutter {
+  width: 52px;
+  min-width: 52px;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.timeline-track-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.timeline-ruler-scroll-area {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Ruler itself — absolutely positioned so it can be wider than the scroll area */
+.timeline-ruler {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  pointer-events: none;
+  min-width: 100%;
+}
+
+.timeline-ruler-tick {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.timeline-ruler-tick-line {
+  width: 1px;
+  background: var(--border-subtle);
+}
+
+.timeline-ruler-tick-line--major {
+  height: 10px;
+  background: var(--border-default);
+}
+
+.timeline-ruler-tick-line--minor {
+  height: 5px;
+}
+
+.timeline-ruler-tick-label {
+  position: absolute;
+  bottom: 12px;
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* Track row */
+.timeline-track-row {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.timeline-clips-scroll-area {
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+  cursor: crosshair;
+}
+
+.timeline-clips-scroll-area::-webkit-scrollbar {
+  height: 6px;
+}
+.timeline-clips-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.timeline-clips-scroll-area::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+/* The track canvas — clips are absolutely positioned inside */
+.timeline-track {
+  position: relative;
+  height: 100%;
+  min-height: 64px;
+  min-width: 100%;
+  background: var(--bg-root, #0d0d0d);
+}
+
+/* Clip blocks on the timeline */
+.timeline-clip {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  border-radius: 5px;
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+  border: 1.5px solid rgba(99, 155, 255, 0.35);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 4px 6px;
+  min-width: 20px;
+  user-select: none;
+}
+
+.timeline-clip:hover {
+  border-color: rgba(99, 155, 255, 0.65);
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.timeline-clip.selected {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 1.5px #60a5fa, 0 2px 12px rgba(96, 165, 250, 0.35);
+  background: linear-gradient(135deg, #1e3a6e 0%, #2d72ff 100%);
+}
+
+.timeline-clip-thumb {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.timeline-clip-thumb img {
+  width: auto;
+  height: 100%;
+  max-width: none;
+  object-fit: none;
+  opacity: 0.45;
+  /* Tiled/filmstrip look — clips use background-image for tiling too */
+}
+
+.timeline-clip-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #e0e9ff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+}
+
+.timeline-clip-time {
+  font-size: 9px;
+  color: rgba(180, 205, 255, 0.75);
+  font-family: var(--font-mono);
+  position: relative;
+  z-index: 1;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.7);
+}
+
+.timeline-clip-delete-btn {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background: rgba(0,0,0,0.5);
+  border: none;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.timeline-clip:hover .timeline-clip-delete-btn {
+  opacity: 1;
+}
+
+.timeline-clip-delete-btn:hover {
+  background: rgba(239,68,68,0.8);
+  color: #fff;
+}
+
+/* Playhead */
+.timeline-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 20;
+  pointer-events: none;
+  left: 0;
+  will-change: transform;
+}
+
+.timeline-playhead-head {
+  width: 10px;
+  height: 14px;
+  background: #f97316;
+  border-radius: 2px;
+  position: absolute;
+  top: 0;
+  left: -5px;
+  clip-path: polygon(0 0, 100% 0, 100% 70%, 50% 100%, 0 70%);
+}
+
+.timeline-playhead-line {
+  width: 1.5px;
+  background: #f97316;
+  position: absolute;
+  top: 14px;
+  bottom: 0;
+  left: -0.75px;
+  opacity: 0.85;
+}
+
+/* Sync the ruler scroll with the clips scroll */
+.timeline-ruler-scroll-area {
+  overflow: hidden;
+}
+
+/* ===== Close Project sidebar button ===== */
+.sidebar-btn--danger {
+  color: var(--danger, #ef4444);
+}
+.sidebar-btn--danger:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--danger, #ef4444);
+}
+
+/* ===== Phone frame toggle button ===== */
+.ctrl-toggle {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  transition: all var(--transition-fast);
+}
+.ctrl-toggle:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.ctrl-toggle.active {
+  background: rgba(37, 99, 235, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ===== Phone Frame Preview ===== */
+
+/* Phone mode: dark studio background */
+.preview-wrapper.phone-mode {
+  background: radial-gradient(ellipse at center, #1c1c1c 30%, #0a0a0a 100%);
+}
+
+/* Constrain video to portrait 9:16 in phone mode */
+.preview-wrapper.phone-mode #video-player {
+  width: auto !important;
+  height: 80% !important;
+  aspect-ratio: 9 / 16 !important;
+  object-fit: cover;
+  border-radius: 38px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Phone bezel — absolutely overlaid on the video */
+.phone-bezel {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  pointer-events: none;
+}
+
+.preview-wrapper.phone-mode .phone-bezel {
+  display: block;
+}
+
+/* The shell — drawn via box-shadow to form the phone body */
+.phone-bezel-shell {
+  /* Height matches the video height in phone-mode (80% of wrapper, but capped) */
+  height: 340px;
+  aspect-ratio: 9 / 16;
+  border: 12px solid #1a1a1a;
+  border-radius: 42px;
+  box-shadow:
+    0 0 0 1px #2e2e2e,
+    0 0 0 2px #111,
+    0 6px 48px rgba(0,0,0,0.7);
+  position: relative;
+  background: transparent;
+}
+
+/* Top notch area */
+.phone-bezel-top {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.phone-bezel-speaker {
+  width: 36px;
+  height: 4px;
+  background: #2a2a2a;
+  border-radius: 2px;
+}
+
+.phone-bezel-camera {
+  width: 8px;
+  height: 8px;
+  background: #222;
+  border: 1px solid #333;
+  border-radius: 50%;
+}
+
+/* Home bar (modern phone style) */
+.phone-bezel-home-bar {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40%;
+  height: 4px;
+  background: #2d2d2d;
+  border-radius: 2px;
+}
+
+/* Side buttons */
+.phone-bezel-side-btn {
+  position: absolute;
+  background: #1a1a1a;
+  border: 1px solid #2e2e2e;
+  border-radius: 2px;
+}
+
+.phone-bezel-side-btn--left {
+  left: -14px;
+  top: 22%;
+  width: 4px;
+  height: 44px;
+}
+
+.phone-bezel-side-btn--right-top {
+  right: -14px;
+  top: 18%;
+  width: 4px;
+  height: 30px;
+}
+
+.phone-bezel-side-btn--right-mid {
+  right: -14px;
+  top: 32%;
+  width: 4px;
+  height: 52px;
+}
+
+/* ===== Settings — System Status ===== */
+.system-status-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.system-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+}
+
+.system-status-row:last-child {
+  border-bottom: none;
+}
+
+.system-status-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.system-status-value {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg-surface);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-subtle);
+}
+
+.system-status-value.version-ok {
+  color: #4ade80;
+  border-color: rgba(74,222,128,0.2);
+  background: rgba(74,222,128,0.06);
+}
+
+.system-status-value.version-bad {
+  color: var(--danger, #ef4444);
+  border-color: rgba(239,68,68,0.2);
+  background: rgba(239,68,68,0.06);
+}
+
+/* ===== Settings — Whisper Install Area ===== */
+.settings-whisper-install-area {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: rgba(249, 115, 22, 0.06);
+  border: 1px solid rgba(249, 115, 22, 0.2);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-whisper-install-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #f97316;
+}
+
+/* ===== Settings — License block ===== */
+.license-text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+}
+
+/* ===== Preview Resize Handle ===== */
+.preview-resize-handle {
+  height: 5px;
+  min-height: 5px;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border-subtle);
+  cursor: ns-resize;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+  transition: background 0.1s;
+}
+.preview-resize-handle:hover,
+.preview-resize-handle.dragging {
+  background: rgba(37, 99, 235, 0.4);
+  border-color: var(--accent);
+}
+.preview-resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 2px;
+  background: var(--border-default);
+  border-radius: 1px;
+}
+
+/* ===== Whisper not-detected banner ===== */
+.whisper-not-detected-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  border-radius: var(--radius-sm);
+  margin: 10px 12px 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.whisper-not-detected-banner span {
+  flex: 1;
+}
+.whisper-warn-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+/* ===== Timeline Track 2 (alternate/darker row) ===== */
+.timeline-track-row--alt {
+  border-top: 1px solid var(--border-subtle);
+  min-height: 52px;
+}
+.timeline-track-row--alt .timeline-track {
+  background: rgba(0,0,0,0.25);
+}
+.timeline-track-row--alt .timeline-clip {
+  background: linear-gradient(135deg, #2d1a5f 0%, #7c3aed 100%);
+  border-color: rgba(167, 139, 250, 0.35);
+}
+.timeline-track-row--alt .timeline-clip:hover {
+  border-color: rgba(167, 139, 250, 0.65);
+}
+.timeline-track-row--alt .timeline-clip.selected {
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 1.5px #a78bfa, 0 2px 12px rgba(167, 139, 250, 0.35);
+}
+
+/* ===== Ruler drag cursor ===== */
+.timeline-ruler-row {
+  cursor: col-resize;
+}
+.timeline-ruler-row.scrubbing {
+  cursor: col-resize;
+  background: var(--bg-elevated);
+}
+
+/* ===== Editor-center flex (preview + timeline split) ===== */
+/* Tab bar: fixed height, never grows */
+.editor-center > .editor-tab-bar {
+  flex: 0 0 auto;
+}
+/* Tab content area: fills all remaining space below preview + tab bar */
+.editor-center > .editor-tab-content {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden;
+}
+#tab-timeline {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  height: 100%;
+}
+#tab-timeline.active {
+  display: flex;
+}
+.timeline-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ===== Delete Project confirmation modal ===== */
+.modal-box--danger {
+  border-color: rgba(239,68,68,0.25);
+  padding: 28px 28px 24px;
+  gap: 12px;
+  align-items: center;
+  text-align: center;
+}
+.modal-icon--danger {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(239,68,68,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ef4444;
+  margin-bottom: 4px;
+  flex-shrink: 0;
+}
+.modal-box--danger .modal-title {
+  font-size: 17px;
+  color: var(--text-primary);
+}
+.modal-box--danger .modal-body {
+  padding: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.modal-box--danger .modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+}
+.modal-box--danger .modal-close:hover { color: var(--text-primary); }
+.modal-box--danger { position: relative; }
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.btn-danger {
+  background: #ef4444;
+  color: #fff;
+  border: 1px solid #dc2626;
+  padding: 7px 18px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.btn-danger:hover { background: #dc2626; }

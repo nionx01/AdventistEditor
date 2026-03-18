@@ -14,11 +14,17 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 // Whitelist of channels the renderer is allowed to invoke
 const INVOKE_CHANNELS = [
+  'settings:get',
+  'settings:set',
+  'settings:pick-folder',
   'project:create',
   'project:save',
   'project:save-to-path',
   'project:open',
+  'project:open-by-path',
   'project:get-recent',
+  'project:remove-from-recent',
+  'project:delete-from-disk',
   'media:import',
   'media:get-info',
   'media:generate-thumbnail',
@@ -42,6 +48,7 @@ const INVOKE_CHANNELS = [
   'app:toggle-devtools',
   'app:fullscreen',
   'setup:mark-complete',
+  'system:check-versions',
 ];
 
 // Whitelist of channels the renderer is allowed to listen to

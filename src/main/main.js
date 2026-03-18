@@ -16,16 +16,18 @@ const { execFile, exec } = require('child_process');
 const path = require('path');
 const fs   = require('fs');
 
-const ProjectService = require('../services/ProjectService');
-const MediaService   = require('../services/MediaService');
-const FFmpegService  = require('../services/FFmpegService');
-const ExportService  = require('../services/ExportService');
-const WhisperService = require('../services/WhisperService');
+const ProjectService  = require('../services/ProjectService');
+const MediaService    = require('../services/MediaService');
+const FFmpegService   = require('../services/FFmpegService');
+const ExportService   = require('../services/ExportService');
+const WhisperService  = require('../services/WhisperService');
+const SettingsService = require('../services/SettingsService');
 
 let splashWindow = null;
 let mainWindow   = null;
 
-const projectService = new ProjectService();
+const settingsService = new SettingsService();
+const projectService  = new ProjectService(settingsService);
 const mediaService   = new MediaService();
 const ffmpegService  = new FFmpegService();
 const exportService  = new ExportService(ffmpegService);
@@ -196,6 +198,7 @@ function registerIpcHandlers() {
   // Project
   ipcMain.handle('project:create',       async (_e, name) => projectService.createProject(name));
   ipcMain.handle('project:open',         async ()         => handleOpenProject());
+  ipcMain.handle('project:open-by-path', async (_e, fp)   => projectService.loadProject(fp));
   ipcMain.handle('project:save-to-path', async (_e, fp, data) => projectService.saveProject(fp, data));
   ipcMain.handle('project:save', async (_e, data) => {
     const safeName = (data.name || 'untitled').replace(/[\\/:*?"<>|]/g, '-');
@@ -209,8 +212,21 @@ function registerIpcHandlers() {
     return (!r.canceled && r.filePath) ? projectService.saveProject(r.filePath, data) : null;
   });
 
+  // App settings
+  ipcMain.handle('settings:get',  async ()           => settingsService.getAllResolved());
+  ipcMain.handle('settings:set',  async (_e, updates) => settingsService.set(updates));
+  ipcMain.handle('settings:pick-folder', async (_e, title) => {
+    const r = await dialog.showOpenDialog(mainWindow, {
+      title: title || 'Select Folder',
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    return r.canceled ? null : r.filePaths[0];
+  });
+
   // Recent projects list
-  ipcMain.handle('project:get-recent', async () => projectService.getRecentProjects());
+  ipcMain.handle('project:get-recent',         async ()        => projectService.getRecentProjects());
+  ipcMain.handle('project:remove-from-recent', async (_e, fp)  => projectService.removeFromRecent(fp));
+  ipcMain.handle('project:delete-from-disk',   async (_e, fp)  => projectService.deleteProjectFromDisk(fp));
 
   // Media
   ipcMain.handle('media:import',             async ()            => handleImportMedia());
@@ -244,52 +260,82 @@ function registerIpcHandlers() {
     const send = (step, percent, message) =>
       mainWindow?.webContents.send('whisper:install-progress', { step, percent, message });
 
-    // Helper: run a shell command and capture output
+    // Build a rich PATH so packaged Electron finds winget, python, pip
+    const extraPaths = [
+      'C:\\Windows\\System32',
+      'C:\\Windows',
+      process.env.LOCALAPPDATA + '\\Microsoft\\WindowsApps',   // winget
+      process.env.APPDATA    + '\\Python\\Python311\\Scripts',
+      process.env.LOCALAPPDATA + '\\Programs\\Python\\Python311',
+      process.env.LOCALAPPDATA + '\\Programs\\Python\\Python311\\Scripts',
+      process.env.LOCALAPPDATA + '\\Programs\\Python\\Python312',
+      process.env.LOCALAPPDATA + '\\Programs\\Python\\Python312\\Scripts',
+      'C:\\Python311', 'C:\\Python311\\Scripts',
+      'C:\\Python312', 'C:\\Python312\\Scripts',
+    ].filter(Boolean).join(';');
+
+    const env = { ...process.env, PATH: extraPaths + ';' + (process.env.PATH || '') };
+
+    // Helper: run a shell command with proper env
     const run = (cmd) => new Promise((resolve, reject) => {
-      exec(cmd, { timeout: 300000 }, (err, stdout, stderr) => {
-        if (err) reject(new Error(stderr || err.message));
-        else resolve(stdout);
+      exec(cmd, { timeout: 360000, shell: true, env }, (err, stdout, stderr) => {
+        // Some tools (winget) write to stderr even on success
+        if (err && !stdout) reject(new Error(stderr || err.message));
+        else resolve(stdout || stderr);
       });
     });
+
+    // Try python launchers in order
+    async function findPython() {
+      for (const cmd of ['py', 'python', 'python3']) {
+        try { await run(`${cmd} --version`); return cmd; } catch { /* try next */ }
+      }
+      return null;
+    }
 
     try {
       // Step 1 — check Python
       send('python', 5, 'Checking for Python...');
-      let pythonCmd = 'python';
-      try {
-        await run('python --version');
-      } catch {
+      let pythonCmd = await findPython();
+
+      if (!pythonCmd) {
+        send('python', 10, 'Python not found. Installing via winget...');
         try {
-          await run('python3 --version');
-          pythonCmd = 'python3';
-        } catch {
-          // Python not found — install via winget
-          send('python', 10, 'Python not found. Installing via winget...');
-          try {
-            await run('winget install -e --id Python.Python.3.11 --silent --accept-source-agreements --accept-package-agreements');
-            send('python', 30, 'Python installed! Verifying...');
-            await run('python --version');
-            pythonCmd = 'python';
-          } catch (wingetErr) {
-            throw new Error('Could not install Python automatically. Please install Python 3 from https://python.org and try again.');
-          }
+          await run('winget install -e --id Python.Python.3.11 --silent --accept-source-agreements --accept-package-agreements');
+          send('python', 28, 'Python installed. Updating PATH...');
+          // Give Windows a moment to register Python on PATH
+          await new Promise(r => setTimeout(r, 3000));
+          pythonCmd = await findPython();
+          if (!pythonCmd) throw new Error('Python installed but not found on PATH. Please restart the app.');
+        } catch (wingetErr) {
+          throw new Error(
+            'Could not install Python automatically.\n' +
+            'Please install Python 3.11 from https://python.org, ' +
+            'tick "Add Python to PATH" during install, then click Retry.'
+          );
         }
       }
-      send('python', 35, 'Python found ✓');
+      send('python', 35, `Python found (${pythonCmd}) ✓`);
 
       // Step 2 — upgrade pip
       send('pip', 40, 'Upgrading pip...');
       try { await run(`${pythonCmd} -m pip install --upgrade pip --quiet`); } catch { /* non-fatal */ }
       send('pip', 50, 'pip ready ✓');
 
-      // Step 3 — install openai-whisper
-      send('whisper', 55, 'Installing openai-whisper (this may take a few minutes)...');
+      // Step 3 — install openai-whisper + torch (CPU)
+      send('whisper', 55, 'Installing Whisper AI (may take 3–5 minutes on first install)...');
       await run(`${pythonCmd} -m pip install openai-whisper --quiet`);
-      send('whisper', 90, 'openai-whisper installed ✓');
+      send('whisper', 88, 'openai-whisper installed ✓');
 
-      // Step 4 — verify
-      send('verify', 95, 'Verifying installation...');
-      await run(`${pythonCmd} -m whisper --help`);
+      // Step 4 — verify whisper is runnable
+      send('verify', 93, 'Verifying Whisper...');
+      try {
+        await run(`${pythonCmd} -c "import whisper; print('ok')"`);
+      } catch {
+        // whisper import can fail if torch isn't installed yet — install it
+        send('verify', 95, 'Installing torch (CPU)...');
+        await run(`${pythonCmd} -m pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --quiet`);
+      }
       send('done', 100, 'Whisper AI is ready!');
 
       return { success: true };
@@ -309,6 +355,58 @@ function registerIpcHandlers() {
   ipcMain.handle('app:is-packaged',   ()         => app.isPackaged);
   ipcMain.handle('app:is-first-run',  ()         => isFirstRun());
   ipcMain.handle('setup:mark-complete', ()        => { markSetupComplete(); return true; });
+
+  // System versions check (for Settings page)
+  ipcMain.handle('system:check-versions', async () => {
+    const extraPaths = [
+      'C:\\Windows\\System32', 'C:\\Windows',
+      (process.env.LOCALAPPDATA || '') + '\\Microsoft\\WindowsApps',
+      (process.env.APPDATA    || '') + '\\Python\\Python311\\Scripts',
+      (process.env.LOCALAPPDATA || '') + '\\Programs\\Python\\Python311',
+      (process.env.LOCALAPPDATA || '') + '\\Programs\\Python\\Python311\\Scripts',
+      (process.env.LOCALAPPDATA || '') + '\\Programs\\Python\\Python312',
+      (process.env.LOCALAPPDATA || '') + '\\Programs\\Python\\Python312\\Scripts',
+      'C:\\Python311', 'C:\\Python311\\Scripts',
+      'C:\\Python312', 'C:\\Python312\\Scripts',
+    ].filter(Boolean).join(';');
+    const env = { ...process.env, PATH: extraPaths + ';' + (process.env.PATH || '') };
+
+    const runSafe = (cmd) => new Promise(resolve => {
+      exec(cmd, { timeout: 8000, shell: true, env }, (err, stdout, stderr) => {
+        resolve((stdout || stderr || '').trim());
+      });
+    });
+
+    // FFmpeg version from bundled binary
+    let ffmpegVer = 'Bundled (unknown)';
+    try {
+      const ffPath = ffmpegService.ffmpegPath;
+      if (ffPath) {
+        const out = await runSafe(`"${ffPath}" -version`);
+        const m = out.match(/version ([^\s]+)/);
+        if (m) ffmpegVer = m[1];
+      }
+    } catch {}
+
+    // Python version
+    let pythonVer = 'Not installed';
+    for (const cmd of ['py', 'python', 'python3']) {
+      const out = await runSafe(`${cmd} --version`);
+      if (out && out.includes('Python')) { pythonVer = out.replace('Python ', '').split(/\s/)[0]; break; }
+    }
+
+    // Whisper version
+    let whisperVer = 'Not installed';
+    for (const cmd of ['py', 'python', 'python3']) {
+      const out = await runSafe(`${cmd} -c "import whisper; print(whisper.__version__)"`);
+      if (out && !out.includes('Error') && !out.includes('Traceback') && !out.includes('ModuleNotFoundError') && out.length < 30) {
+        whisperVer = out;
+        break;
+      }
+    }
+
+    return { ffmpeg: ffmpegVer, python: pythonVer, whisper: whisperVer };
+  });
 
   // App actions — triggered from the logo dropdown
   ipcMain.handle('app:quit',            () => app.quit());

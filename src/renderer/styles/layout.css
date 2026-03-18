@@ -266,13 +266,15 @@
   overflow: hidden;
 }
 
+/* Default preview container height — JS resize handle can override with inline style */
+.editor-center > #preview-container {
+  flex: 0 0 45%;   /* 45% of editor-center height as default split */
+  min-height: 120px;
+  max-height: 82%;
+}
+
 .editor-inspector-panel {
-  width: 280px;
-  min-width: 240px;
-  border-left: 1px solid var(--border-subtle);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
+  display: none; /* Inspector hidden — center preview fills all available width */
 }
 
 /* ===== Panel Base ===== */

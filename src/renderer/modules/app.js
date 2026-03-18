@@ -30,6 +30,10 @@ const AppState = {
   selectedExportPreset: 0,
   // Context menu state
   ctxProject: null,
+  // Timeline zoom: pixels per second
+  timelineZoom: 80,
+  // Thumbnail cache: filePath -> local file:// path
+  thumbnailCache: {},
 };
 
 // ---------------------------------------------------------------------------
@@ -41,7 +45,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initEditorTabs();
   initPlayer();
   initProjectButtons();
+  initPreviewResize();
   initTimeline();
+  initTimelineDropZone();
+  initMediaDropZone();
   initSubtitles();
   initExport();
   initSettings();
@@ -51,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadDefaultPresets();
   checkFFmpeg();
   loadAppVersion();
+  loadAppSettings();
   loadRecentProjects();
 });
 
@@ -85,6 +93,7 @@ function initLogoDropdown() {
         case 'open-project':   openProject(); break;
         case 'save-project':   saveProject(); break;
         case 'import-media':   importMedia(); break;
+        case 'close-project':  closeProject(); break;
         case 'settings':       switchView('settings'); break;
         case 'toggle-devtools': await window.electronAPI.invoke('app:toggle-devtools'); break;
         case 'fullscreen':     await window.electronAPI.invoke('app:fullscreen'); break;
@@ -113,6 +122,15 @@ function initNavigation() {
   document.querySelectorAll('.sidebar-btn[data-view]').forEach(btn => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
   });
+
+  // Close Project button
+  document.getElementById('nav-close-project')?.addEventListener('click', () => {
+    if (AppState.project) {
+      const name = AppState.project.name || 'this project';
+      if (!confirm(`Close "${name}"? It will be saved automatically.`)) return;
+    }
+    closeProject();
+  });
 }
 
 function switchView(viewName) {
@@ -131,21 +149,67 @@ function switchView(viewName) {
   document.getElementById('view-title').textContent = titles[viewName] || viewName;
 
   AppState.currentView = viewName;
+
+  // When navigating to Settings, refresh system versions and saved settings
+  if (viewName === 'settings') {
+    setTimeout(loadSystemVersions, 150);
+    loadAppSettings();
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Project open/close — shows/hides editor nav button + header actions
 // ---------------------------------------------------------------------------
 function setProjectOpen(isOpen) {
-  const navEditor   = document.getElementById('nav-editor');
-  const btnImport   = document.getElementById('btn-import');
-  const btnSave     = document.getElementById('btn-save');
-  const badge       = document.getElementById('project-name-badge');
+  const navHome         = document.getElementById('nav-home');
+  const navEditor       = document.getElementById('nav-editor');
+  const navCloseProject = document.getElementById('nav-close-project');
+  const btnImport       = document.getElementById('btn-import');
+  const btnSave         = document.getElementById('btn-save');
+  const badge           = document.getElementById('project-name-badge');
 
-  navEditor.classList.toggle('hidden', !isOpen);
-  btnImport.classList.toggle('hidden', !isOpen);
-  btnSave.classList.toggle('hidden', !isOpen);
-  if (!isOpen) badge.classList.add('hidden');
+  // When a project is open: hide Home, show Editor + Close Project + header actions
+  navHome?.classList.toggle('hidden', isOpen);
+  navEditor?.classList.toggle('hidden', !isOpen);
+  navCloseProject?.classList.toggle('hidden', !isOpen);
+  btnImport?.classList.toggle('hidden', !isOpen);
+  btnSave?.classList.toggle('hidden', !isOpen);
+  if (!isOpen) badge?.classList.add('hidden');
+
+  // Show/hide Close Project item in logo dropdown
+  document.getElementById('logo-dropdown-close-project')?.classList.toggle('hidden', !isOpen);
+}
+
+// ---------------------------------------------------------------------------
+// Close Project
+// ---------------------------------------------------------------------------
+function closeProject() {
+  // Auto-save before closing so nothing is lost
+  if (AppState.project) saveProject().catch(() => {});
+
+  AppState.project         = null;
+  AppState.projectFilePath = null;
+  AppState.mediaItems      = [];
+  AppState.clips           = [];
+  AppState.subtitles       = [];
+  AppState.selectedClipIndex    = -1;
+  AppState.selectedSubtitleIndex = -1;
+  AppState.activeMediaIndex = -1;
+  AppState.markIn  = null;
+  AppState.markOut = null;
+  AppState.thumbnailCache = {};
+  AppState.timelineZoom = 80;
+
+  const video = document.getElementById('video-player');
+  if (video) { video.src = ''; video.load(); }
+
+  setProjectOpen(false);
+  renderMediaList();
+  renderTimeline();
+  renderSubtitleList();
+  switchView('welcome');
+  loadRecentProjects();
+  setStatus('Project closed');
 }
 
 // ---------------------------------------------------------------------------
@@ -198,11 +262,11 @@ function initProjectContextMenu() {
 
       switch (action) {
         case 'open':
-          loadProjectData(proj);
+          openProjectByPath(proj.filePath);
           break;
         case 'export':
           // Load project, switch to editor, then open export tab
-          loadProjectData(proj);
+          await openProjectByPath(proj.filePath);
           setTimeout(() => {
             switchView('editor');
             switchEditorTab('export');
@@ -212,14 +276,52 @@ function initProjectContextMenu() {
           setStatus(`"${proj.name}" archived (feature coming soon)`);
           break;
         case 'delete':
-          if (confirm(`Delete "${proj.name}" from recent projects?`)) {
-            await removeFromRecentProjects(proj.filePath);
-            loadRecentProjects();
-          }
+          showDeleteProjectModal(proj);
           break;
       }
     });
   });
+}
+
+// ---------------------------------------------------------------------------
+// Delete Project — 2-step confirmation modal + full disk deletion
+// ---------------------------------------------------------------------------
+function showDeleteProjectModal(proj) {
+  const modal   = document.getElementById('modal-delete-project');
+  const msgEl   = document.getElementById('modal-delete-project-msg');
+  const btnConfirm = document.getElementById('modal-delete-project-confirm');
+  const btnCancel  = document.getElementById('modal-delete-project-cancel');
+  const btnClose   = document.getElementById('modal-delete-project-close');
+  if (!modal) return;
+
+  msgEl.textContent = `"${proj.name}" and all its files will be permanently deleted from your computer. This cannot be undone.`;
+  modal.classList.remove('hidden');
+
+  function close() {
+    modal.classList.add('hidden');
+    btnConfirm.removeEventListener('click', onConfirm);
+    btnCancel.removeEventListener('click', close);
+    btnClose.removeEventListener('click', close);
+    modal.removeEventListener('click', onBackdrop);
+  }
+
+  async function onConfirm() {
+    close();
+    try {
+      await window.electronAPI.invoke('project:delete-from-disk', proj.filePath);
+      loadRecentProjects();
+      setStatus(`"${proj.name}" deleted permanently.`);
+    } catch (err) {
+      setStatus('Delete failed: ' + (err.message || 'unknown error'));
+    }
+  }
+
+  function onBackdrop(e) { if (e.target === modal) close(); }
+
+  btnConfirm.addEventListener('click', onConfirm);
+  btnCancel.addEventListener('click', close);
+  btnClose.addEventListener('click', close);
+  modal.addEventListener('click', onBackdrop);
 }
 
 function showProjectCtxMenu(projectData, x, y) {
@@ -288,11 +390,11 @@ function renderRecentProjects(projects) {
     `;
   }).join('');
 
-  // Click card = open project
+  // Click card = open project (load full data from .aeproj file on disk)
   container.querySelectorAll('.recent-project-card').forEach((card, i) => {
     card.addEventListener('click', (e) => {
       if (e.target.closest('.recent-project-menu-btn')) return;
-      loadProjectData(projects[i]);
+      openProjectByPath(projects[i].filePath);
     });
   });
 
@@ -313,9 +415,11 @@ function shortenPath(fp) {
 }
 
 async function removeFromRecentProjects(filePath) {
-  // ProjectService manages the recent list; we load it, filter, and save it back
-  // (This will be handled gracefully by ProjectService in a future update)
-  setStatus('Project removed from recents');
+  try {
+    await window.electronAPI.invoke('project:remove-from-recent', filePath);
+  } catch (err) {
+    console.warn('Could not remove from recents:', err.message);
+  }
 }
 
 // Load a project object directly into app state (from recent list)
@@ -425,6 +529,17 @@ async function openProject() {
   }
 }
 
+// Load a project directly from its .aeproj file path (reads full data from disk)
+async function openProjectByPath(filePath) {
+  if (!filePath) return;
+  try {
+    const fullProject = await window.electronAPI.invoke('project:open-by-path', filePath);
+    loadProjectData(fullProject);
+  } catch (err) {
+    setStatus('Could not open project: ' + (err.message || 'file not found'));
+  }
+}
+
 async function saveProject() {
   if (!AppState.project) { setStatus('No project to save'); return; }
 
@@ -449,6 +564,24 @@ async function saveProject() {
   }
 }
 
+// Auto-save silently (only when project has a file path — not a new unsaved project)
+async function autoSaveProject() {
+  if (!AppState.project || !AppState.projectFilePath) return;
+  const projectData = {
+    ...AppState.project,
+    mediaItems:   AppState.mediaItems,
+    clips:        AppState.clips,
+    subtitles:    AppState.subtitles,
+    stylePresets: AppState.stylePresets,
+  };
+  try {
+    await window.electronAPI.invoke('project:save-to-path', AppState.projectFilePath, projectData);
+    // Silent save — no status message to avoid interrupting the user
+  } catch (err) {
+    console.warn('Auto-save failed:', err.message);
+  }
+}
+
 function updateProjectBadge(name) {
   const badge = document.getElementById('project-name-badge');
   badge.textContent = name;
@@ -466,6 +599,51 @@ async function importMedia() {
   }
 }
 
+// Wire up file-drop onto the media panel so users can drag files from Explorer
+function initMediaDropZone() {
+  const panel = document.getElementById('media-list');
+  if (!panel) return;
+
+  panel.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    panel.classList.add('drop-active');
+  });
+
+  panel.addEventListener('dragleave', (e) => {
+    if (!panel.contains(e.relatedTarget)) panel.classList.remove('drop-active');
+  });
+
+  panel.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    panel.classList.remove('drop-active');
+
+    const videoExts = ['mp4','mov','avi','mkv','webm','wmv','mp3','wav','aac','ogg','flac','m4a'];
+    const files = Array.from(e.dataTransfer.files)
+      .filter(f => videoExts.includes(f.name.split('.').pop().toLowerCase()));
+
+    if (files.length === 0) { setStatus('No supported video/audio files dropped.'); return; }
+
+    setStatus(`Importing ${files.length} file(s)…`);
+    const items = [];
+    for (const file of files) {
+      try {
+        const info = await window.electronAPI.invoke('media:get-info', file.path);
+        items.push(info);
+      } catch { /* skip unreadable files */ }
+    }
+    if (items.length > 0) {
+      AppState.mediaItems.push(...items);
+      renderMediaList();
+      if (AppState.activeMediaIndex < 0) selectMedia(0);
+      setStatus(`${items.length} file(s) imported`);
+      // Auto-save so media persists when the project is reopened
+      autoSaveProject();
+    }
+  });
+}
+
 function renderMediaList() {
   const container = document.getElementById('media-list');
   if (AppState.mediaItems.length === 0) {
@@ -473,33 +651,69 @@ function renderMediaList() {
       <div class="empty-state">
         <p>No media imported.</p>
         <button class="btn btn-sm btn-secondary btn-import-media">Import Files</button>
+        <p class="drop-hint">or drag &amp; drop files here</p>
       </div>`;
     return;
   }
 
-  container.innerHTML = AppState.mediaItems.map((item, i) => `
-    <div class="media-item ${i === AppState.activeMediaIndex ? 'active' : ''}" data-index="${i}">
-      <div class="media-name">${item.fileName || 'Unknown'}</div>
-      <div class="media-meta">
-        ${item.duration ? formatTime(item.duration) : '--:--'} &middot;
-        ${item.resolution || '?'} &middot;
-        ${item.fileSize ? formatFileSize(item.fileSize) : '?'}
-      </div>
-    </div>
-  `).join('');
+  container.innerHTML = AppState.mediaItems.map((item, i) => {
+    const thumb = AppState.thumbnailCache[item.filePath];
+    const thumbHtml = thumb
+      ? `<img src="file://${thumb.replace(/\\/g,'/')}" alt="" draggable="false">`
+      : `<div class="media-thumb-placeholder"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" width="14" height="14"><polygon points="4 3 13 8 4 13 4 3"/></svg></div>`;
+    return `
+      <div class="media-item ${i === AppState.activeMediaIndex ? 'active' : ''}"
+           data-index="${i}" draggable="true" title="Drag to timeline to add">
+        <div class="media-thumb">${thumbHtml}</div>
+        <div class="media-item-info">
+          <div class="media-name">${escapeHtml(item.fileName || 'Unknown')}</div>
+          <div class="media-meta">${item.duration ? formatTime(item.duration) : '--:--'} &middot; ${item.resolution || ''}</div>
+        </div>
+      </div>`;
+  }).join('');
 
   container.querySelectorAll('.media-item').forEach(el => {
     el.addEventListener('click', () => selectMedia(parseInt(el.dataset.index)));
+    el.addEventListener('dragstart', (e) => {
+      e.dataTransfer.setData('text/plain', el.dataset.index);
+      e.dataTransfer.effectAllowed = 'copy';
+    });
   });
+
+  // Generate missing thumbnails asynchronously
+  generateMissingThumbnails();
+}
+
+async function generateMissingThumbnails() {
+  for (let i = 0; i < AppState.mediaItems.length; i++) {
+    const item = AppState.mediaItems[i];
+    if (!item.filePath || item.type === 'audio') continue;
+    if (AppState.thumbnailCache[item.filePath]) continue;
+
+    try {
+      const thumbPath = await window.electronAPI.invoke('media:generate-thumbnail', item.filePath, null, 1);
+      if (thumbPath) {
+        AppState.thumbnailCache[item.filePath] = thumbPath;
+        // Update just this item's thumbnail in the DOM without full re-render
+        const el = document.querySelector(`.media-item[data-index="${i}"] .media-thumb`);
+        if (el) {
+          el.innerHTML = `<img src="file://${thumbPath.replace(/\\/g,'/')}" alt="" draggable="false">`;
+        }
+        // Also update any timeline clips that use this media
+        renderTimeline();
+      }
+    } catch { /* skip */ }
+  }
 }
 
 function selectMedia(index) {
+  // Just highlight the item in the media panel — do NOT load into player.
+  // The preview player only shows clips that are on the timeline.
   AppState.activeMediaIndex = index;
   const item = AppState.mediaItems[index];
   if (!item) return;
   renderMediaList();
-  loadVideoInPlayer(item.filePath);
-  setStatus(`Loaded: ${item.fileName}`);
+  setStatus(`Selected: ${item.fileName} — drag to timeline to add`);
 }
 
 // ---------------------------------------------------------------------------
@@ -515,11 +729,15 @@ function initPlayer() {
   document.getElementById('btn-mark-out').addEventListener('click', markOut);
   document.getElementById('btn-split').addEventListener('click', splitAtPlayhead);
 
+  // Phone preview toggle
+  document.getElementById('btn-phone-preview')?.addEventListener('click', togglePhonePreview);
+
   video.addEventListener('timeupdate', () => {
     if (video.duration) {
       seekbar.value = (video.currentTime / video.duration) * 100;
       updateTimeDisplay();
       updateSubtitleOverlay(video.currentTime);
+      updateTimelinePlayhead();
     }
   });
 
@@ -554,9 +772,33 @@ function togglePlay() {
 }
 
 function loadVideoInPlayer(filePath) {
+  if (!filePath) return;
   const video = document.getElementById('video-player');
-  video.src = filePath;
+  // Ensure proper file:// URL for Electron
+  const src = filePath.startsWith('file://') ? filePath : 'file://' + filePath.replace(/\\/g, '/');
+  video.src = src;
   video.load();
+}
+
+function togglePhonePreview() {
+  const wrapper = document.getElementById('preview-wrapper');
+  const btn     = document.getElementById('btn-phone-preview');
+  if (!wrapper) return;
+  const active = wrapper.classList.toggle('phone-mode');
+  btn?.classList.toggle('active', active);
+
+  if (active) {
+    // Size the bezel shell to match the portrait video dimensions
+    requestAnimationFrame(() => {
+      const video = document.getElementById('video-player');
+      const shell = document.querySelector('.phone-bezel-shell');
+      if (!video || !shell) return;
+      // Video in phone-mode is height:80% of wrapper, aspect 9:16
+      const wrapperH = wrapper.clientHeight;
+      const videoH   = Math.round(wrapperH * 0.80);
+      shell.style.height = videoH + 'px';
+    });
+  }
 }
 
 function updateTimeDisplay() {
@@ -583,7 +825,87 @@ function markOut() {
 // ---------------------------------------------------------------------------
 // Timeline & Clips
 // ---------------------------------------------------------------------------
-function initTimeline() {}
+// ---------------------------------------------------------------------------
+// Preview ↔ Timeline resizable split
+// ---------------------------------------------------------------------------
+function initPreviewResize() {
+  const handle    = document.getElementById('preview-resize-handle');
+  const container = document.getElementById('preview-container');
+  if (!handle || !container) return;
+
+  let dragging   = false;
+  let startY     = 0;
+  let startH     = 0;
+
+  handle.addEventListener('mousedown', (e) => {
+    dragging = true;
+    startY   = e.clientY;
+    startH   = container.getBoundingClientRect().height;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const editorH  = container.parentElement?.getBoundingClientRect().height || 600;
+    const delta    = e.clientY - startY;
+    const newH     = Math.max(80, Math.min(startH + delta, editorH * 0.85));
+    container.style.height = newH + 'px';
+    container.style.flex   = 'none';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+}
+
+function updateZoomLabel() {
+  const label    = document.getElementById('timeline-zoom-label');
+  if (!label) return;
+  // Calculate how many seconds fit in ~600px visible width at current zoom
+  const pxPerSec = AppState.timelineZoom;
+  const visibleW = document.getElementById('timeline-clips-scroll')?.getBoundingClientRect().width || 600;
+  const secVisible = visibleW / pxPerSec;
+  if (secVisible >= 3600) {
+    label.textContent = Math.round(secVisible / 3600) + 'h';
+  } else if (secVisible >= 60) {
+    label.textContent = Math.round(secVisible / 60) + 'm';
+  } else {
+    label.textContent = Math.round(secVisible) + 's';
+  }
+}
+
+function initTimeline() {
+  document.getElementById('btn-timeline-zoom-in')?.addEventListener('click', () => {
+    AppState.timelineZoom = Math.min(AppState.timelineZoom * 1.5, 600);
+    updateZoomLabel();
+    renderTimeline();
+  });
+  document.getElementById('btn-timeline-zoom-out')?.addEventListener('click', () => {
+    AppState.timelineZoom = Math.max(AppState.timelineZoom / 1.5, 5);
+    updateZoomLabel();
+    renderTimeline();
+  });
+
+  // Scroll-wheel zoom on timeline area
+  document.getElementById('tab-timeline')?.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      AppState.timelineZoom = Math.min(AppState.timelineZoom * 1.25, 600);
+    } else {
+      AppState.timelineZoom = Math.max(AppState.timelineZoom / 1.25, 5);
+    }
+    updateZoomLabel();
+    renderTimeline();
+  }, { passive: false });
+}
 
 function addClipFromMarks() {
   const clip = {
@@ -598,6 +920,7 @@ function addClipFromMarks() {
   AppState.markOut = null;
   renderTimeline();
   setStatus(`Clip added: ${formatTime(clip.startTime)} – ${formatTime(clip.endTime)}`);
+  autoSaveProject();
 }
 
 function splitAtPlayhead() {
@@ -615,44 +938,110 @@ function splitAtPlayhead() {
   setStatus(`Split at ${formatTime(t)}`);
 }
 
-function renderTimeline() {
-  const container = document.getElementById('timeline-track');
-  const badge     = document.getElementById('clip-count');
-  badge.textContent = `${AppState.clips.length} clip${AppState.clips.length !== 1 ? 's' : ''}`;
+function initTimelineDropZone() {
+  // Use the stable scroll container as the drop target (timeline-track is rebuilt on render)
+  const dropZone = document.getElementById('tab-timeline');
+  if (!dropZone) return;
 
-  if (AppState.clips.length === 0) {
-    container.innerHTML = '<div class="empty-state"><p>No clips on the timeline. Mark In/Out on your video to create clips.</p></div>';
-    return;
-  }
+  dropZone.addEventListener('dragover', (e) => {
+    if (!e.dataTransfer.types.includes('text/plain')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    dropZone.classList.add('drop-active');
+  });
 
-  container.innerHTML = AppState.clips.map((clip, i) => {
-    const dur = clip.endTime - clip.startTime;
-    return `
-      <div class="timeline-clip ${i === AppState.selectedClipIndex ? 'selected' : ''}" data-index="${i}">
-        <span class="clip-label">${escapeHtml(clip.label)}</span>
-        <span class="clip-time">${formatTimePrecise(clip.startTime)} – ${formatTimePrecise(clip.endTime)} (${formatTimePrecise(dur)})</span>
-        <button class="clip-delete-btn" data-index="${i}" title="Delete clip">
-          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" width="11" height="11">
-            <line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/>
-          </svg>
-        </button>
-      </div>`;
-  }).join('');
+  dropZone.addEventListener('dragleave', (e) => {
+    if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drop-active');
+  });
 
-  container.querySelectorAll('.timeline-clip').forEach(el => {
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drop-active');
+    const idx = parseInt(e.dataTransfer.getData('text/plain'));
+    if (isNaN(idx)) return;
+    const item = AppState.mediaItems[idx];
+    if (!item) return;
+
+    // Detect if dropped onto Track 2 row
+    const t2Row = document.getElementById('timeline-track-row-2');
+    const trackIndex = (t2Row && t2Row.contains(e.target)) ? 1 : 0;
+
+    const clip = {
+      id: generateId(),
+      sourceIndex: idx,
+      label: item.fileName || `Clip ${AppState.clips.length + 1}`,
+      startTime: 0,
+      endTime: item.duration || 0,
+      trackIndex,
+    };
+    AppState.clips.push(clip);
+    AppState.selectedClipIndex = AppState.clips.length - 1;
+    renderTimeline();
+    const trackName = trackIndex === 1 ? 'Track 2' : 'Track 1';
+    setStatus(`"${clip.label}" added to ${trackName}`);
+    autoSaveProject();
+
+    // Load this clip's source video into the player if the player is empty
+    const video = document.getElementById('video-player');
+    if (item.filePath && (!video.src || video.src === '' || video.src === window.location.href)) {
+      loadVideoInPlayer(item.filePath);
+      document.getElementById('preview-empty')?.classList.add('hidden');
+    }
+  });
+}
+
+function buildClipHtml(clip, i, left, w) {
+  const media = AppState.mediaItems[clip.sourceIndex];
+  const thumb = media ? AppState.thumbnailCache[media.filePath] : null;
+  // Filmstrip: tile thumbnail as background-image so it repeats across clip width
+  const bgStyle = thumb
+    ? `background-image:url('file://${thumb.replace(/\\/g,'/')}'); background-size:auto 100%; background-repeat:repeat-x; background-blend-mode:overlay;`
+    : '';
+  return `
+    <div class="timeline-clip ${i === AppState.selectedClipIndex ? 'selected' : ''}"
+         data-index="${i}"
+         style="left:${left}px; width:${Math.max(w, 20)}px; ${bgStyle}"
+         title="${escapeHtml(clip.label)}">
+      <span class="timeline-clip-label">${escapeHtml(clip.label)}</span>
+      <span class="timeline-clip-time">${formatTimePrecise(clip.startTime)} – ${formatTimePrecise(clip.endTime)}</span>
+      <button class="timeline-clip-delete-btn" data-index="${i}" title="Delete clip">
+        <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="2" width="8" height="8">
+          <line x1="1" y1="1" x2="9" y2="9"/><line x1="9" y1="1" x2="1" y2="9"/>
+        </svg>
+      </button>
+    </div>`;
+}
+
+function attachTrackListeners(trackEl, pxPerSec) {
+  trackEl.querySelectorAll('.timeline-clip').forEach(el => {
     el.addEventListener('click', (e) => {
-      if (e.target.closest('.clip-delete-btn')) return;
+      if (e.target.closest('.timeline-clip-delete-btn')) return;
       AppState.selectedClipIndex = parseInt(el.dataset.index);
       renderTimeline();
       updateInspector();
-      // Jump video to clip start
-      const clip  = AppState.clips[AppState.selectedClipIndex];
-      const video = document.getElementById('video-player');
-      if (clip && video.src) video.currentTime = clip.startTime;
+      // Load the clip's source video into the player and seek to the clip start
+      const clip   = AppState.clips[AppState.selectedClipIndex];
+      const source = clip && AppState.mediaItems[clip.sourceIndex];
+      if (clip && source) {
+        const video = document.getElementById('video-player');
+        const targetSrc = 'file://' + source.filePath.replace(/\\/g, '/');
+        if (!video.src || !video.src.endsWith(encodeURI(source.filePath.replace(/\\/g, '/')))) {
+          video.src = targetSrc;
+          video.load();
+          video.addEventListener('loadedmetadata', () => {
+            video.currentTime = clip.startTime;
+          }, { once: true });
+        } else {
+          video.currentTime = clip.startTime;
+        }
+        // Show player, hide empty state
+        document.getElementById('preview-empty')?.classList.add('hidden');
+        video.style.display = 'block';
+      }
     });
   });
 
-  container.querySelectorAll('.clip-delete-btn').forEach(btn => {
+  trackEl.querySelectorAll('.timeline-clip-delete-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
       const idx = parseInt(btn.dataset.index);
@@ -662,8 +1051,230 @@ function renderTimeline() {
       renderTimeline();
       updateInspector();
       setStatus('Clip deleted');
+      autoSaveProject();
     });
   });
+
+  trackEl.addEventListener('click', (e) => {
+    if (e.target.closest('.timeline-clip')) return;
+    const rect = trackEl.getBoundingClientRect();
+    const x    = e.clientX - rect.left + (trackEl.parentElement?.scrollLeft || 0);
+    seekToTimelineX(x, pxPerSec);
+  });
+}
+
+function renderTimeline() {
+  const track     = document.getElementById('timeline-track');
+  const track2    = document.getElementById('timeline-track-2');
+  const badge     = document.getElementById('clip-count');
+  const empty     = document.getElementById('timeline-empty');
+  const workspace = document.getElementById('timeline-workspace');
+
+  badge.textContent = `${AppState.clips.length} clip${AppState.clips.length !== 1 ? 's' : ''}`;
+
+  if (AppState.clips.length === 0) {
+    empty?.classList.remove('hidden');
+    workspace?.classList.add('hidden');
+    updateZoomLabel();
+    return;
+  }
+
+  empty?.classList.add('hidden');
+  workspace?.classList.remove('hidden');
+
+  const pxPerSec = AppState.timelineZoom;
+
+  // Split clips by track (default trackIndex 0 = Track 1, 1 = Track 2)
+  const track1Clips = AppState.clips.filter(c => (c.trackIndex || 0) === 0);
+  const track2Clips = AppState.clips.filter(c => (c.trackIndex || 0) === 1);
+
+  // Total duration = max of both tracks
+  const t1Dur = track1Clips.reduce((s, c) => s + Math.max(0, c.endTime - c.startTime), 0);
+  const t2Dur = track2Clips.reduce((s, c) => s + Math.max(0, c.endTime - c.startTime), 0);
+  const totalDur   = Math.max(t1Dur, t2Dur);
+  const totalWidth = Math.max(totalDur * pxPerSec, 800);
+
+  // ------ Track 1 HTML ------
+  let cursor1 = 0;
+  const t1Html = track1Clips.map((clip) => {
+    const i   = AppState.clips.indexOf(clip);
+    const dur = Math.max(0, clip.endTime - clip.startTime);
+    const w   = dur * pxPerSec;
+    const left = cursor1;
+    cursor1   += w;
+    return buildClipHtml(clip, i, left, w);
+  }).join('');
+
+  // ------ Track 2 HTML ------
+  let cursor2 = 0;
+  const t2Html = track2Clips.map((clip) => {
+    const i   = AppState.clips.indexOf(clip);
+    const dur = Math.max(0, clip.endTime - clip.startTime);
+    const w   = dur * pxPerSec;
+    const left = cursor2;
+    cursor2   += w;
+    return buildClipHtml(clip, i, left, w);
+  }).join('');
+
+  // ------ Render Track 1 ------
+  if (track) {
+    track.style.width = totalWidth + 'px';
+    track.innerHTML = t1Html + `<div id="timeline-playhead" class="timeline-playhead" style="left:0">
+        <div class="timeline-playhead-head"></div>
+        <div class="timeline-playhead-line"></div>
+      </div>`;
+    attachTrackListeners(track, pxPerSec);
+  }
+
+  // ------ Render Track 2 ------
+  if (track2) {
+    track2.style.width = totalWidth + 'px';
+    track2.innerHTML = t2Html;
+    attachTrackListeners(track2, pxPerSec);
+  }
+
+  // ------ Ruler + scroll sync ------
+  buildTimelineRuler(totalWidth, pxPerSec);
+  syncTimelineScroll();
+  updateTimelinePlayhead();
+  updateZoomLabel();
+}
+
+function buildTimelineRuler(totalWidth, pxPerSec) {
+  const ruler = document.getElementById('timeline-ruler');
+  if (!ruler) return;
+  ruler.style.width = totalWidth + 'px';
+
+  // Choose tick interval based on zoom
+  let majorInterval = 10; // seconds between major ticks
+  if (pxPerSec >= 150) majorInterval = 1;
+  else if (pxPerSec >= 60) majorInterval = 5;
+  else if (pxPerSec >= 20) majorInterval = 10;
+  else if (pxPerSec >= 8)  majorInterval = 30;
+  else                     majorInterval = 60;
+
+  const minorInterval = majorInterval / 5;
+  const totalSeconds  = totalWidth / pxPerSec;
+
+  let html = '';
+  for (let t = 0; t <= totalSeconds + minorInterval; t += minorInterval) {
+    const x       = t * pxPerSec;
+    const isMajor = Math.abs(t % majorInterval) < 0.001 || Math.abs(t % majorInterval - majorInterval) < 0.001;
+    const label   = isMajor ? formatTimeCompact(t) : '';
+    html += `<div class="timeline-ruler-tick" style="left:${x}px">
+      ${label ? `<span class="timeline-ruler-tick-label">${label}</span>` : ''}
+      <div class="timeline-ruler-tick-line ${isMajor ? 'timeline-ruler-tick-line--major' : 'timeline-ruler-tick-line--minor'}"></div>
+    </div>`;
+  }
+  ruler.innerHTML = html;
+}
+
+function syncTimelineScroll() {
+  const clipScroll  = document.getElementById('timeline-clips-scroll');
+  const clipScroll2 = document.getElementById('timeline-clips-scroll-2');
+  const rulerRow    = document.querySelector('.timeline-ruler-row');
+  if (!clipScroll) return;
+
+  // Remove old scroll listener
+  clipScroll._scrollHandler && clipScroll.removeEventListener('scroll', clipScroll._scrollHandler);
+  clipScroll._scrollHandler = () => {
+    const sl = clipScroll.scrollLeft;
+    document.getElementById('timeline-ruler').style.transform = `translateX(-${sl}px)`;
+    // Sync track 2 scroll
+    if (clipScroll2 && clipScroll2.scrollLeft !== sl) clipScroll2.scrollLeft = sl;
+  };
+  clipScroll.addEventListener('scroll', clipScroll._scrollHandler);
+
+  // Sync track 2 → track 1
+  if (clipScroll2) {
+    clipScroll2._scrollHandler && clipScroll2.removeEventListener('scroll', clipScroll2._scrollHandler);
+    clipScroll2._scrollHandler = () => {
+      if (clipScroll.scrollLeft !== clipScroll2.scrollLeft) clipScroll.scrollLeft = clipScroll2.scrollLeft;
+    };
+    clipScroll2.addEventListener('scroll', clipScroll2._scrollHandler);
+  }
+
+  // Ruler drag-to-scrub
+  if (rulerRow && !rulerRow._scrubAttached) {
+    rulerRow._scrubAttached = true;
+    let scrubbing = false;
+
+    function getScrubX(e) {
+      const scrollEl = document.getElementById('timeline-clips-scroll');
+      const rulerRect = rulerRow.getBoundingClientRect();
+      const gutterW   = 52; // .timeline-track-gutter width
+      return (e.clientX - rulerRect.left - gutterW) + (scrollEl?.scrollLeft || 0);
+    }
+
+    rulerRow.addEventListener('mousedown', (e) => {
+      scrubbing = true;
+      rulerRow.classList.add('scrubbing');
+      const x = getScrubX(e);
+      if (x >= 0) seekToTimelineX(x, AppState.timelineZoom);
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!scrubbing) return;
+      const x = getScrubX(e);
+      if (x >= 0) seekToTimelineX(x, AppState.timelineZoom);
+    });
+    document.addEventListener('mouseup', () => {
+      if (!scrubbing) return;
+      scrubbing = false;
+      rulerRow.classList.remove('scrubbing');
+    });
+  }
+}
+
+function seekToTimelineX(x, pxPerSec) {
+  const totalDur = AppState.clips.reduce((sum, c) => sum + Math.max(0, c.endTime - c.startTime), 0);
+  const seekSec  = x / pxPerSec;
+  if (seekSec < 0 || seekSec > totalDur) return;
+
+  // Find which clip this time falls in and seek the video to the right position
+  let accumulated = 0;
+  for (const clip of AppState.clips) {
+    const dur = clip.endTime - clip.startTime;
+    if (seekSec <= accumulated + dur) {
+      const offsetInClip = seekSec - accumulated;
+      const video = document.getElementById('video-player');
+      if (video.src) video.currentTime = clip.startTime + offsetInClip;
+      return;
+    }
+    accumulated += dur;
+  }
+}
+
+function updateTimelinePlayhead() {
+  const playhead = document.getElementById('timeline-playhead');
+  if (!playhead || AppState.clips.length === 0) return;
+
+  const video = document.getElementById('video-player');
+  const t     = video?.currentTime || 0;
+  const pxPerSec = AppState.timelineZoom;
+
+  // Find position of current time within the sequential clip layout
+  let accumulated = 0;
+  let playheadX   = 0;
+  for (const clip of AppState.clips) {
+    const dur = clip.endTime - clip.startTime;
+    if (t >= clip.startTime && t <= clip.endTime) {
+      playheadX = (accumulated + (t - clip.startTime)) * pxPerSec;
+      break;
+    }
+    accumulated += dur;
+    playheadX = accumulated * pxPerSec; // past all clips
+  }
+
+  playhead.style.left = playheadX + 'px';
+}
+
+function formatTimeCompact(secs) {
+  const s = Math.floor(secs);
+  const m = Math.floor(s / 60);
+  const h = Math.floor(m / 60);
+  if (h > 0) return `${h}:${String(m % 60).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
+  return `${m}:${String(s % 60).padStart(2,'0')}`;
 }
 
 function deleteSelectedClip() {
@@ -673,6 +1284,7 @@ function deleteSelectedClip() {
   renderTimeline();
   updateInspector();
   setStatus('Clip deleted');
+  autoSaveProject();
 }
 
 // ---------------------------------------------------------------------------
@@ -829,90 +1441,53 @@ function updateSubtitleOverlay(currentTime) {
 // Whisper AI subtitle generation
 // ---------------------------------------------------------------------------
 async function initWhisperUI() {
-  const btn          = document.getElementById('btn-generate-subtitles');
-  const controls     = document.getElementById('whisper-controls');
-  const installBox   = document.getElementById('whisper-install-box');
-  const btnInstall   = document.getElementById('btn-whisper-install');
-  const btnRun       = document.getElementById('btn-whisper-run');
-  const btnCancel    = document.getElementById('btn-whisper-cancel');
+  const btn     = document.getElementById('btn-generate-subtitles');
+  const controls = document.getElementById('whisper-controls');
+  const banner  = document.getElementById('whisper-not-detected-banner');
+  const btnRun  = document.getElementById('btn-whisper-run');
+  const btnCancel = document.getElementById('btn-whisper-cancel');
 
-  // Check if Whisper is available; auto-install on first packaged run
-  async function checkAndShowWhisper() {
-    try {
-      const result     = await window.electronAPI.invoke('whisper:check');
-      const isPackaged = await window.electronAPI.invoke('app:is-packaged');
-      const firstRun   = await window.electronAPI.invoke('app:is-first-run');
-
-      if (result && result.available) {
-        // Whisper ready — wire up the normal AI Generate button
-        installBox?.classList.add('hidden');
-        btn?.addEventListener('click', () => controls.classList.toggle('hidden'));
-        // Mark setup complete if this is first run
-        if (firstRun) await window.electronAPI.invoke('setup:mark-complete');
-      } else {
-        // Not installed — show install panel on button click
-        btn?.addEventListener('click', () => {
-          installBox?.classList.toggle('hidden');
-          controls.classList.add('hidden');
-        });
-
-        // First launch of a packaged build → auto-open install panel and start install
-        if (isPackaged && firstRun) {
-          installBox?.classList.remove('hidden');
-          // Small delay so the editor UI is fully rendered before kicking off the install
-          setTimeout(() => btnInstall?.click(), 900);
-        }
-      }
-    } catch {
-      btn?.addEventListener('click', () => {
-        installBox?.classList.toggle('hidden');
-        controls.classList.add('hidden');
-      });
+  // Helper: guard click — require a loaded video
+  function requireVideo() {
+    if (AppState.activeMediaIndex < 0 || !AppState.mediaItems[AppState.activeMediaIndex]) {
+      setStatus('⚠ Select a video first before generating subtitles.');
+      return false;
     }
+    return true;
   }
 
-  await checkAndShowWhisper();
-
-  // Install button
-  btnInstall?.addEventListener('click', async () => {
-    const installProgress = document.getElementById('whisper-install-progress');
-    const installFill     = document.getElementById('whisper-install-fill');
-    const installText     = document.getElementById('whisper-install-text');
-
-    btnInstall.disabled = true;
-    btnInstall.textContent = 'Installing…';
-    installProgress?.classList.remove('hidden');
-
-    // Listen for install progress
-    const cleanup = window.electronAPI.on('whisper:install-progress', (p) => {
-      if (installFill && p.percent != null) installFill.style.width = `${p.percent}%`;
-      if (installText) installText.textContent = p.message || '…';
-    });
-
-    try {
-      const result = await window.electronAPI.invoke('whisper:install');
-      if (result && result.success) {
-        installText.textContent = '✓ Whisper AI installed successfully!';
-        installFill.style.width = '100%';
-        // After success swap to normal generate controls and mark setup done
-        await window.electronAPI.invoke('setup:mark-complete');
-        setTimeout(() => {
-          installBox?.classList.add('hidden');
-          btn?.addEventListener('click', () => controls.classList.toggle('hidden'));
-          setStatus('✓ Whisper AI installed! Click AI Generate to create subtitles.');
-        }, 1500);
-      } else {
-        installText.textContent = '✗ ' + (result?.error || 'Install failed');
-        btnInstall.disabled = false;
-        btnInstall.textContent = 'Retry Install';
-      }
-    } catch (err) {
-      installText.textContent = '✗ ' + err.message;
-      btnInstall.disabled = false;
-      btnInstall.textContent = 'Retry Install';
-    } finally {
-      if (cleanup) cleanup();
+  // Check Whisper availability
+  let whisperAvailable = false;
+  try {
+    const result = await window.electronAPI.invoke('whisper:check');
+    whisperAvailable = !!(result && result.available);
+    if (whisperAvailable) {
+      const firstRun = await window.electronAPI.invoke('app:is-first-run');
+      if (firstRun) await window.electronAPI.invoke('setup:mark-complete');
     }
+  } catch { /* network/IPC error — treat as not available */ }
+
+  if (whisperAvailable) {
+    banner?.classList.add('hidden');
+    btn?.addEventListener('click', () => {
+      if (!requireVideo()) return;
+      controls.classList.toggle('hidden');
+    });
+  } else {
+    // Show warning banner — send user to Settings to install
+    banner?.classList.remove('hidden');
+    btn?.addEventListener('click', () => {
+      if (!requireVideo()) return;
+      // Show the banner briefly to remind user to go to Settings
+      banner?.classList.remove('hidden');
+      setStatus('⚠ Whisper AI not detected — go to Settings to install it.');
+    });
+  }
+
+  // "Go to Settings" button inside the warning banner
+  document.getElementById('btn-go-to-settings-whisper')?.addEventListener('click', () => {
+    // Navigate to Settings view via sidebar nav button
+    document.querySelector('.sidebar-btn[data-view="settings"]')?.click();
   });
 
   btnCancel?.addEventListener('click', () => {
@@ -1062,21 +1637,62 @@ function renderExportPresets() {
 
 async function startExport() {
   if (AppState.clips.length === 0) { setStatus('No clips to export. Add clips to the timeline first.'); return; }
-  const format   = document.getElementById('export-format').value;
+
+  const format     = document.getElementById('export-format').value;
   const resolution = document.getElementById('export-resolution').value;
-  const quality  = document.getElementById('export-quality').value;
-  const framing  = document.getElementById('export-framing').value;
-  const burnSubs = document.getElementById('export-burn-subs').checked;
+  const quality    = document.getElementById('export-quality').value;
+  const framing    = document.getElementById('export-framing').value;
+  const burnSubs   = document.getElementById('export-burn-subs').checked;
+
+  const ext         = format === 'gif' ? 'gif' : format === 'mp3' ? 'mp3' : 'mp4';
+  const projectName = (AppState.project?.name || 'export').replace(/[\\/:*?"<>|]/g, '-');
+
+  // Use saved export folder if set, otherwise show Save dialog
+  let outputPath;
+  try {
+    const appSettings = await window.electronAPI.invoke('settings:get');
+    if (appSettings.exportDir) {
+      // Fixed folder: auto-generate filename, no dialog needed
+      const ts       = new Date().toISOString().slice(0,19).replace(/[T:]/g,'-');
+      const filename = `${projectName}_${ts}.${ext}`;
+      outputPath     = appSettings.exportDir.replace(/[/\\]$/, '') + '\\' + filename;
+    }
+  } catch { /* fall through to dialog */ }
+
+  if (!outputPath) {
+    const saveResult = await window.electronAPI.invoke('dialog:save-file', {
+      title: 'Save Export As',
+      defaultPath: `${projectName}.${ext}`,
+      filters: [
+        { name: ext.toUpperCase(), extensions: [ext] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    });
+    if (saveResult.canceled || !saveResult.filePath) {
+      setStatus('Export cancelled.');
+      return;
+    }
+    outputPath = saveResult.filePath;
+  }
   const progressEl   = document.getElementById('export-progress');
   const progressFill = document.getElementById('progress-fill');
   const progressText = document.getElementById('progress-text');
   progressEl.classList.remove('hidden');
   progressFill.style.width = '0%';
   progressText.textContent = 'Preparing export...';
-  const job = { id: generateId(), format, resolution, quality, framing, burnSubtitles: burnSubs, clips: AppState.clips, subtitles: burnSubs ? AppState.subtitles : [], stylePresets: AppState.stylePresets };
+
+  const job = {
+    id: generateId(), format, resolution, quality, framing,
+    burnSubtitles: burnSubs,
+    clips: AppState.clips,
+    subtitles: burnSubs ? AppState.subtitles : [],
+    stylePresets: AppState.stylePresets,
+    outputPath,
+  };
+
   try {
     if (format === 'gif') {
-      const fps = document.getElementById('gif-fps').value;
+      const fps   = document.getElementById('gif-fps').value;
       const scale = document.getElementById('gif-scale').value;
       await window.electronAPI.invoke('export:gif', { ...job, fps, scale });
     } else {
@@ -1084,7 +1700,7 @@ async function startExport() {
     }
     progressFill.style.width = '100%';
     progressText.textContent = 'Export complete!';
-    setStatus('Export finished successfully');
+    setStatus('Export finished → ' + outputPath);
   } catch (err) {
     progressText.textContent = 'Export failed: ' + err.message;
     setStatus('Export failed');
@@ -1095,14 +1711,129 @@ async function startExport() {
 // Settings
 // ---------------------------------------------------------------------------
 function initSettings() {
-  document.getElementById('btn-browse-ffmpeg')?.addEventListener('click', async () => {
-    const r = await window.electronAPI.invoke('dialog:open-file', { title: 'Select FFmpeg Binary', properties: ['openFile'] });
-    if (!r.canceled && r.filePaths.length > 0) document.getElementById('ffmpeg-path').value = r.filePaths[0];
+  // Projects folder — browse
+  document.getElementById('btn-browse-projects-dir')?.addEventListener('click', async () => {
+    const chosen = await window.electronAPI.invoke('settings:pick-folder', 'Select Projects Folder');
+    if (chosen) {
+      document.getElementById('setting-projects-dir').value = chosen;
+      await window.electronAPI.invoke('settings:set', { projectsDir: chosen });
+      setStatus('Projects folder updated. New projects will be saved there.');
+    }
   });
-  document.getElementById('btn-browse-export-folder')?.addEventListener('click', async () => {
-    const r = await window.electronAPI.invoke('dialog:open-file', { title: 'Select Export Folder', properties: ['openDirectory'] });
-    if (!r.canceled && r.filePaths.length > 0) document.getElementById('export-folder').value = r.filePaths[0];
+  // Projects folder — reset to default
+  document.getElementById('btn-reset-projects-dir')?.addEventListener('click', async () => {
+    await window.electronAPI.invoke('settings:set', { projectsDir: null });
+    await loadAppSettings();
+    setStatus('Projects folder reset to default.');
   });
+
+  // Export folder — browse
+  document.getElementById('btn-browse-export-dir')?.addEventListener('click', async () => {
+    const chosen = await window.electronAPI.invoke('settings:pick-folder', 'Select Export Folder');
+    if (chosen) {
+      document.getElementById('setting-export-dir').value = chosen;
+      await window.electronAPI.invoke('settings:set', { exportDir: chosen });
+      setStatus('Export folder set. Exports will go there automatically.');
+    }
+  });
+  // Export folder — clear (ask every time)
+  document.getElementById('btn-clear-export-dir')?.addEventListener('click', async () => {
+    await window.electronAPI.invoke('settings:set', { exportDir: null });
+    document.getElementById('setting-export-dir').value = '';
+    setStatus('Export folder cleared — you will be asked every time.');
+  });
+
+  // Refresh system versions button
+  document.getElementById('btn-refresh-versions')?.addEventListener('click', loadSystemVersions);
+
+  // Install Whisper from Settings page
+  document.getElementById('btn-settings-install-whisper')?.addEventListener('click', installWhisperFromSettings);
+}
+
+// Load saved settings into the UI (called on startup and when opening Settings)
+async function loadAppSettings() {
+  try {
+    const s = await window.electronAPI.invoke('settings:get');
+    // Projects folder — always show the resolved path (custom or default)
+    const projInput = document.getElementById('setting-projects-dir');
+    if (projInput) projInput.value = s.projectsDirResolved || s.projectsDir || '';
+    // Export folder — show custom path or leave blank (placeholder shows "Ask every time")
+    const expInput = document.getElementById('setting-export-dir');
+    if (expInput) expInput.value = s.exportDir || '';
+  } catch { /* non-critical */ }
+}
+
+async function installWhisperFromSettings() {
+  const btn      = document.getElementById('btn-settings-install-whisper');
+  const progress = document.getElementById('settings-whisper-progress');
+  const fill     = document.getElementById('settings-whisper-fill');
+  const text     = document.getElementById('settings-whisper-text');
+
+  if (btn) btn.disabled = true;
+  progress?.classList.remove('hidden');
+
+  const cleanup = window.electronAPI.on('whisper:install-progress', ({ percent, message }) => {
+    if (fill) fill.style.width = `${percent || 0}%`;
+    if (text) text.textContent = message || '…';
+  });
+
+  try {
+    const result = await window.electronAPI.invoke('whisper:install');
+    if (result && result.success) {
+      if (text) text.textContent = 'Whisper AI installed successfully!';
+      await loadSystemVersions();
+    } else {
+      if (text) text.textContent = 'Installation failed: ' + (result?.error || 'Unknown error');
+    }
+  } catch (err) {
+    if (text) text.textContent = 'Error: ' + err.message;
+  } finally {
+    if (btn) btn.disabled = false;
+    if (typeof cleanup === 'function') cleanup();
+  }
+}
+
+async function loadSystemVersions() {
+  const ffmpegEl  = document.getElementById('status-ffmpeg-ver');
+  const pythonEl  = document.getElementById('status-python-ver');
+  const whisperEl = document.getElementById('status-whisper-ver');
+  const btn       = document.getElementById('btn-refresh-versions');
+
+  if (ffmpegEl)  ffmpegEl.textContent  = 'Checking…';
+  if (pythonEl)  pythonEl.textContent  = 'Checking…';
+  if (whisperEl) whisperEl.textContent = 'Checking…';
+  if (btn) btn.disabled = true;
+
+  try {
+    const versions = await window.electronAPI.invoke('system:check-versions');
+
+    if (ffmpegEl)  { ffmpegEl.textContent  = versions.ffmpeg  || '–'; setVersionBadge(ffmpegEl,  versions.ffmpeg); }
+    if (pythonEl)  { pythonEl.textContent  = versions.python  || '–'; setVersionBadge(pythonEl,  versions.python); }
+    if (whisperEl) { whisperEl.textContent = versions.whisper || '–'; setVersionBadge(whisperEl, versions.whisper); }
+
+    // Show install button if Whisper is not installed
+    const whisperMissing = !versions.whisper || versions.whisper === 'Not installed' || versions.whisper.includes('Error');
+    const installArea = document.getElementById('settings-whisper-install-area');
+    installArea?.classList.toggle('hidden', !whisperMissing);
+
+    // Reset install progress if whisper is now installed
+    if (!whisperMissing) {
+      document.getElementById('settings-whisper-progress')?.classList.add('hidden');
+    }
+  } catch (err) {
+    if (ffmpegEl)  ffmpegEl.textContent  = 'Error';
+    if (pythonEl)  pythonEl.textContent  = 'Error';
+    if (whisperEl) whisperEl.textContent = 'Error';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+function setVersionBadge(el, ver) {
+  if (!el) return;
+  const installed = ver && ver !== '–' && !ver.includes('Not installed') && !ver.includes('Error') && ver.trim() !== '';
+  el.classList.toggle('version-ok',  installed);
+  el.classList.toggle('version-bad', !installed);
 }
 
 // ---------------------------------------------------------------------------
@@ -1149,6 +1880,8 @@ function initMainProcessListeners() {
     renderMediaList();
     if (AppState.activeMediaIndex < 0 && mediaItems.length > 0) selectMedia(0);
     setStatus(`${mediaItems.length} file(s) imported`);
+    // Auto-save so media persists when the project is reopened
+    autoSaveProject();
   });
 
   window.electronAPI.on('export:progress', (progress) => {
@@ -1183,19 +1916,11 @@ async function loadAppVersion() {
 // FFmpeg Check
 // ---------------------------------------------------------------------------
 async function checkFFmpeg() {
-  const indicator = document.getElementById('status-ffmpeg');
+  // Status-bar FFmpeg indicator has been removed — result only shown in Settings
   try {
-    const result = await window.electronAPI.invoke('ffmpeg:check');
-    if (result && result.available) {
-      indicator.textContent = 'FFmpeg: ready';
-      indicator.style.color = 'var(--color-success)';
-    } else {
-      indicator.textContent = 'FFmpeg: not found';
-      indicator.style.color = 'var(--color-warning)';
-    }
+    await window.electronAPI.invoke('ffmpeg:check');
   } catch {
-    indicator.textContent = 'FFmpeg: error';
-    indicator.style.color = 'var(--color-error)';
+    // silent — FFmpeg status is visible on the Settings page
   }
 }
 

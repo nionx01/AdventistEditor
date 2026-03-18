@@ -1,7 +1,7 @@
 {
   "name": "adventist-editor",
   "productName": "AdventistEditor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Edit Long Videos Into Social-Ready Content",
   "main": "src/main/main.js",
   "scripts": {
@@ -19,7 +19,7 @@
     "ffmpeg"
   ],
   "author": "nionx01",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "build": {
     "appId": "com.adventisteditor.app",
     "productName": "AdventistEditor",
@@ -42,7 +42,8 @@
       "icon": "src/assets/AdventistEditorLogo.ico",
       "artifactName": "AdventistEditorSetup-${version}.exe",
       "executableName": "AdventistEditor",
-      "requestedExecutionLevel": "asInvoker"
+      "requestedExecutionLevel": "asInvoker",
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "oneClick": false,
