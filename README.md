@@ -1,240 +1,119 @@
+<div align="center">
+
+<img src="src/assets/AdventistEditorIcon.png" width="100" alt="AdventistEditor" />
+
 # AdventistEditor
 
-> **Edit Long Videos Into Social-Ready Content**
+**Professional desktop video editor for social-media-ready content.**
 
-AdventistEditor is a professional desktop video editing application built with Electron. It helps content creators transform long recordings (sermons, speeches, interviews, podcasts) into polished short-form content for TikTok, YouTube Shorts, Instagram Reels, and other platforms.
+[![Version](https://img.shields.io/badge/version-0.1.2-blue?style=flat-square)](https://github.com/nionx01/AdventistEditor/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows-lightgrey?style=flat-square&logo=windows)](https://github.com/nionx01/AdventistEditor/releases)
+[![License](https://img.shields.io/badge/license-Proprietary-red?style=flat-square)](LICENSE)
+[![Electron](https://img.shields.io/badge/built%20with-Electron-47848F?style=flat-square&logo=electron)](https://electronjs.org)
 
-**GitHub Repository:** [github.com/nionx01/AdventistEditor](https://github.com/nionx01/AdventistEditor)
+[Download](https://github.com/nionx01/AdventistEditor/releases) &nbsp;·&nbsp; [Report a Bug](https://github.com/nionx01/AdventistEditor/issues) &nbsp;·&nbsp; [Contact](mailto:jbenjamyn1@gmail.com)
 
----
+</div>
+
+<br>
+
+## Overview
+
+AdventistEditor is a proprietary desktop video editing application built for content creators who need to transform long recordings such as sermons, speeches, interviews, and podcasts into polished short-form content ready for TikTok, YouTube Shorts, Instagram Reels, and similar platforms.
+
+The app runs entirely offline with no subscriptions or cloud dependencies. FFmpeg is bundled inside the installer so users never need to install anything separately.
+
+<br>
 
 ## Features
 
-- **Project System** — Create, save and re-open `.aeproj` project files
-- **Media Import** — Import video and audio files with automatic metadata extraction
-- **Video Player** — Built-in preview player with play/pause, seek, and volume control
-- **Timeline Editing** — Mark In/Out, trim clips, split at playhead, reorder, delete
-- **Subtitle Engine** — Add, edit, style and preview subtitle blocks in real time
-- **AI Subtitles** — Generate subtitles automatically using Whisper AI (installed on first launch)
-- **Style Presets** — Font, color, outline, background box, display mode per preset
-- **Export System** — Export MP4 (TikTok/Shorts/Reels/Landscape) or GIF
-- **Audio Tools** — Extract, mute, replace, and mix background music
-- **Auto-Updater** — Checks GitHub Releases for updates automatically (packaged builds only)
-- **Bundled FFmpeg** — FFmpeg ships with the app — users do not need to install it separately
+**Multi-track Timeline** — Two video tracks with drag-and-drop clip placement, split at playhead, trim, and delete.
 
----
+**AI Subtitle Generation** — Auto-transcribe any video using local Whisper AI. Fully offline, no API key needed.
 
-## Project Structure
+**Subtitle Styling** — Control font, size, color, outline, background box, and display mode per style preset.
 
-```
-AdventistEditor/
-├── forge.config.js              # Electron Forge packaging + GitHub publisher config
-├── package.json
-├── README.md
-│
-└── src/
-    ├── main/
-    │   └── main.js              # Main process: windows, IPC, updater, first-run setup
-    │
-    ├── preload/
-    │   └── preload.js           # Secure contextBridge IPC bridge (channel whitelist)
-    │
-    ├── renderer/
-    │   ├── pages/
-    │   │   ├── index.html       # Main editor window
-    │   │   └── splash.html      # Splash/loading screen
-    │   ├── styles/
-    │   │   ├── theme.css        # CSS variables, base reset
-    │   │   ├── layout.css       # Structural layout (sidebar, panels, views)
-    │   │   └── components.css   # Buttons, forms, player, timeline, subtitles
-    │   └── modules/
-    │       └── app.js           # All renderer logic
-    │
-    ├── services/
-    │   ├── FFmpegService.js     # All FFmpeg operations (uses bundled ffmpeg-static)
-    │   ├── WhisperService.js    # Whisper AI subtitle generation pipeline
-    │   ├── MediaService.js      # Media file metadata + thumbnail generation
-    │   ├── ProjectService.js    # Project create/save/load + recent projects
-    │   └── ExportService.js     # Orchestrates multi-step render pipeline
-    │
-    └── assets/
-        ├── AdventistEditorIcon.png    # In-app icon (transparent background)
-        ├── AdventistEditorLogo.png    # Logo for packaging
-        └── AdventistEditorLogo.ico   # Windows installer icon
-```
+**Phone Preview Mode** — Live 9:16 phone bezel overlay so you can frame vertical content before exporting.
 
----
+**Export Engine** — MP4 and GIF export with presets for TikTok, Reels, Shorts, and Landscape.
 
-## Getting Started (Development)
+**Project System** — Save and reopen `.aeproj` project files with full media and clip persistence.
 
-### Prerequisites
+**Auto-Updater** — Silently checks GitHub Releases on startup and prompts when a new version is available.
 
-- **Node.js** 18 or newer — [nodejs.org](https://nodejs.org)
-- **Git** (optional, for cloning)
+<br>
 
-FFmpeg does **not** need to be installed — it is bundled via `ffmpeg-static`.
+## Download
 
-### Install Dependencies
+Go to the [Releases](https://github.com/nionx01/AdventistEditor/releases) page and download the latest `AdventistEditorSetup-x.x.x.exe`.
+
+> Windows may show a SmartScreen prompt on first launch because the app is not yet code-signed. Click **Run anyway** to proceed. The app is safe to install.
+
+<br>
+
+## System Requirements
+
+| Requirement | Minimum |
+|---|---|
+| OS | Windows 10 or Windows 11 (64-bit) |
+| RAM | 4 GB |
+| Storage | 300 MB plus space for your video files |
+| Python | Optional, only needed for AI subtitle generation |
+
+<br>
+
+## Building from Source
+
+This project is proprietary. Building from source is permitted only for personal use in accordance with the [LICENSE](LICENSE).
+
+**Prerequisites**
+
+- [Node.js](https://nodejs.org) 18 or newer
+- Git
+
+**Setup**
 
 ```bash
+git clone https://github.com/nionx01/AdventistEditor.git
 cd AdventistEditor
 npm install
-```
-
-### Run in Development
-
-```bash
 npm run dev
 ```
 
----
-
-## NPM Scripts
-
-| Script | Purpose |
-|---|---|
-| `npm run dev` | Start app in development mode |
-| `npm run package` | Package the app without installer |
-| `npm run make` | Build Windows installer (`.exe`) |
-| `npm run publish` | Publish release to GitHub Releases |
-
----
-
-## Bundled Dependencies
-
-| Dependency | Bundled? | Notes |
-|---|---|---|
-| FFmpeg | ✅ Yes | Via `ffmpeg-static` — no install needed |
-| FFprobe | ✅ Yes | Via `ffprobe-static` — no install needed |
-| Whisper AI | ⚡ Auto-installed | Installed automatically on first launch via in-app setup |
-| Python | ⚡ Auto-installed | Installed automatically if missing (requires `winget` on Windows) |
-
----
-
-## Whisper AI — Auto Install on First Launch
-
-When a user installs AdventistEditor and opens it for the first time, the app automatically detects whether Whisper AI (and Python) are installed. If not, it starts the installation automatically — no manual steps required.
-
-**What happens on first launch:**
-
-1. App opens and checks for Whisper AI
-2. If Whisper is missing, the install panel opens automatically in the editor
-3. A progress bar shows each step: Python check → pip upgrade → Whisper install
-4. When complete, Whisper AI is ready and the setup flag is saved so it never runs again
-
-Users can also trigger this manually by clicking the **AI Generate** button in the Subtitles tab.
-
----
-
-## Packaging for Windows
-
-To build a Windows installer:
+**Build Windows Installer**
 
 ```bash
 npm run make
 ```
 
-This uses `@electron-forge/maker-squirrel` to produce `AdventistEditorSetup.exe` in `out/make/`.
+Output will be placed in `dist/AdventistEditorSetup-x.x.x.exe`.
 
-Before building, ensure:
-- `src/assets/AdventistEditorLogo.ico` exists
-- `package.json` has the correct `version` field (bump it for each release)
-- `forge.config.js` has `owner: 'nionx01'` (already set)
-
----
-
-## GitHub Releases Publishing
-
-AdventistEditor is configured to publish to **[github.com/nionx01/AdventistEditor](https://github.com/nionx01/AdventistEditor)** via `@electron-forge/publisher-github`.
-
-### Step 1 — Set your GitHub token
-
-Create a GitHub Personal Access Token with `repo` scope at [github.com/settings/tokens](https://github.com/settings/tokens), then set it as an environment variable:
-
-```bash
-# Windows (Command Prompt)
-set GITHUB_TOKEN=ghp_your_token_here
-
-# Windows (PowerShell)
-$env:GITHUB_TOKEN = "ghp_your_token_here"
-```
-
-### Step 2 — Bump the version
-
-Edit `package.json` and increment the `version` field before each release:
-
-```json
-"version": "0.0.2"
-```
-
-### Step 3 — Publish
-
-```bash
-npm run publish
-```
-
-This creates a **draft GitHub Release** at `github.com/nionx01/AdventistEditor/releases` with the installer attached. Review it there and click **Publish release** when ready.
-
----
-
-## How Auto-Updates Work
-
-AdventistEditor uses [`update-electron-app`](https://github.com/electron/update-electron-app) which polls `github.com/nionx01/AdventistEditor/releases` for new versions.
-
-**Important:** Auto-updates only work in **packaged builds** (`npm run make`). In development (`npm run dev`), `app.isPackaged` is `false` so updates are skipped automatically.
-
-**Update flow:**
-
-1. App starts and shows the splash screen
-2. Main window opens
-3. In background, updater polls GitHub Releases every hour
-4. If a newer version is found, it downloads silently and prompts the user to restart
-5. User restarts — new version is applied
-
-To release an update: bump `version` in `package.json`, run `npm run publish`, then publish the GitHub draft release.
-
----
-
-## Security Model
-
-| Setting | Value |
-|---|---|
-| `contextIsolation` | `true` |
-| `nodeIntegration` | `false` |
-| `sandbox` | `false` (required for preload file access) |
-| IPC | Whitelisted channels only via `contextBridge` |
-| `remote` module | Not used |
-
-All IPC calls go through `window.electronAPI` (defined in `preload.js`) which only allows channels explicitly listed in `INVOKE_CHANNELS` and `LISTEN_CHANNELS`.
-
----
+<br>
 
 ## Keyboard Shortcuts
 
 | Key | Action |
 |---|---|
-| `Space` | Play / Pause |
-| `I` | Mark In |
-| `O` | Mark Out |
-| `Delete` | Delete selected clip or subtitle |
-| `Arrow Left` | Move playhead back 1 second |
-| `Arrow Right` | Move playhead forward 1 second |
-| `Arrow Up` | Move playhead back 5 seconds |
-| `Arrow Down` | Move playhead forward 5 seconds |
+| Space | Play and Pause |
+| I | Mark In |
+| O | Mark Out |
+| Delete | Delete selected clip |
+| Left and Right arrows | Seek 1 second |
+| Up and Down arrows | Seek 5 seconds |
+| Ctrl and Scroll | Timeline zoom |
 
----
+<br>
 
 ## License
 
-MIT — See `LICENSE` file.
+Copyright (c) 2026 NionX. All Rights Reserved.
 
----
+This software is proprietary and closed-source. Copying, modifying, redistributing, or reverse engineering any part of this software is strictly prohibited. See [LICENSE](LICENSE) for full terms.
 
-## Built With
+For inquiries contact [jbenjamyn1@gmail.com](mailto:jbenjamyn1@gmail.com).
 
-- [Electron](https://electronjs.org)
-- [Electron Forge](https://www.electronforge.io)
-- [fluent-ffmpeg](https://github.com/fluent-ffmpeg/node-fluent-ffmpeg)
-- [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static)
-- [update-electron-app](https://github.com/electron/update-electron-app)
-- [OpenAI Whisper](https://github.com/openai/whisper) (local, open-source)
+<br>
+
+<div align="center">
+  <sub>Built by <a href="https://github.com/nionx01">NionX</a></sub>
+</div>
